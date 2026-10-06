@@ -6,6 +6,7 @@ import { errorMiddleware } from "./middlewares/error.middleware.js";
 
 import { notFoundMiddleware } from "./middlewares/not-found.middleware.js";
 import { requestLoggerMiddleware } from "./middlewares/request-logger.middleware.js";
+import { mongooseErrorMiddleware } from "./middlewares/mongoose-error.middleware.js";
 
 const app = express();
 
@@ -23,6 +24,8 @@ app.use("/api/projects", projectRoutes);
 
 // 404 handler
 app.use(notFoundMiddleware);
+
+app.use(mongooseErrorMiddleware);
 
 // Global error handler
 app.use(errorMiddleware);
