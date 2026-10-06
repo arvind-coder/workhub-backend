@@ -1,5 +1,6 @@
 import { createProject, deleteProject, getProjectById, getProjects, updateProject } from "./project.service.js";
 import { AppError } from "../../middlewares/app-error.js";
+import { validateCreateProject, validateUpdateProject } from "./project.validation.js";
 export const testError = (_req, _res) => {
     throw new AppError("This is a test error", 400);
 };
@@ -33,6 +34,7 @@ export const getProject = (req, res) => {
 };
 export const createNewProject = (req, res) => {
     const { name, description, ownerId } = req.body;
+    validateCreateProject(name, description, ownerId);
     const project = createProject(name, description, ownerId);
     res.status(201).json({
         success: true,
@@ -44,13 +46,15 @@ export const updateExistingProject = (req, res) => {
     if (!id || Array.isArray(id)) {
         throw new AppError("Invalid project id", 400);
     }
-    const project = updateProject(id, req.body);
+    const { name, description, status } = req.body;
+    validateUpdateProject(name, description, status);
+    const project = updateProject(id, {
+        name,
+        description,
+        status
+    });
     if (!project) {
-        res.status(404).json({
-            success: false,
-            message: "Project not found"
-        });
-        return;
+        throw new AppError("Project not found", 404);
     }
     res.status(200).json({
         success: true,
