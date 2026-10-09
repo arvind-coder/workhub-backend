@@ -9,21 +9,22 @@ import {
   testUnknownError,
   updateExistingProject
 } from "./project.controller.js";
+import { authMiddleware } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.get("/", asyncHandler(listProjects));
+router.get("/", authMiddleware, asyncHandler(listProjects));
 
 router.get("/test-error", asyncHandler(testError));
 
 router.get("/test-unknown-error", asyncHandler(testUnknownError));
 
-router.get("/:id", asyncHandler(getProject));
+router.get("/:id", authMiddleware, asyncHandler(getProject));
 
-router.post("/", asyncHandler(createNewProject));
+router.post("/", authMiddleware, asyncHandler(createNewProject));
 
-router.patch("/:id", asyncHandler(updateExistingProject));
+router.patch("/:id", authMiddleware, asyncHandler(updateExistingProject));
 
-router.delete("/:id", asyncHandler(deleteExistingProject));
+router.delete("/:id", authMiddleware, asyncHandler(deleteExistingProject));
 
 export default router;

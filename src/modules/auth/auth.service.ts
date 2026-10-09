@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { UserModel } from "../users/user.model.js";
 import type { User } from "../users/user.types.js";
 import { AppError } from "../../middlewares/app-error.js";
+import { generateAccessToken } from "../../utils/jwt.js";
 
 const toUser = (user: {
   _id: unknown;
@@ -46,4 +47,44 @@ export const registerUser = async (
   });
 
   return toUser(user);
+};
+
+export const loginUser = async (
+  email: string,
+  password: string
+): Promise<{ user: User; accessToken: string }> => {
+  const userDocument = await UserModel.findOne({
+    email
+  }).select("+password");
+
+  if (!userDocument) {
+    throw new AppError(
+      "Invalid email or password",
+      401
+    );
+  }
+
+  const isPasswordValid = await bcrypt.compare(
+    password,
+    userDocument.password
+  );
+
+  if (!isPasswordValid) {
+    throw new AppError(
+      "Invalid email or password",
+      401
+    );
+  }
+
+  const user = toUser(userDocument);
+
+  const accessToken = generateAccessToken(
+    user.id,
+    user.role
+  );
+
+  return {
+    user,
+    accessToken
+  };
 };

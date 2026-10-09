@@ -1,6 +1,6 @@
 import { AppError } from "../../middlewares/app-error.js";
 import { sendSuccess } from "../../utils/api-response.js";
-import { registerUser } from "./auth.service.js";
+import { loginUser, registerUser } from "./auth.service.js";
 export const register = async (req, res) => {
     const { name, email, password } = req.body;
     if (typeof name !== "string" ||
@@ -17,5 +17,18 @@ export const register = async (req, res) => {
     }
     const user = await registerUser(name.trim(), email.trim().toLowerCase(), password);
     sendSuccess(res, user, 201);
+};
+export const login = async (req, res) => {
+    const { email, password } = req.body;
+    if (typeof email !== "string" ||
+        email.trim().length === 0) {
+        throw new AppError("Email is required", 400);
+    }
+    if (typeof password !== "string" ||
+        password.length === 0) {
+        throw new AppError("Password is required", 400);
+    }
+    const result = await loginUser(email.trim().toLowerCase(), password);
+    sendSuccess(res, result);
 };
 //# sourceMappingURL=auth.controller.js.map
