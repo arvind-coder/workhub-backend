@@ -23,5 +23,8 @@ const projectSchema = new Schema({
 }, {
     timestamps: true
 });
+projectSchema.index({ ownerId: 1 });
+projectSchema.index({ status: 1 });
+projectSchema.index({ createdAt: -1 });
 export const ProjectModel = model("Project", projectSchema);
 //# sourceMappingURL=project.model.js.map

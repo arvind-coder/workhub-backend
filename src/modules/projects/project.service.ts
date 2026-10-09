@@ -25,6 +25,10 @@ const toProject = (project: {
 export interface GetProjectsOptions {
   page: number;
   limit: number;
+  search?: string;
+  status?: ProjectStatus;
+  sortBy?: "name" | "createdAt" | "updatedAt";
+  sortOrder?: "asc" | "desc";
 }
 
 export interface GetProjectsResult {
@@ -38,20 +42,59 @@ export interface GetProjectsResult {
 export const getProjects = async (
   options: GetProjectsOptions
 ): Promise<GetProjectsResult> => {
-  const { page, limit } = options;
+  const {
+    page,
+    limit,
+    search,
+    status,
+    sortBy = "createdAt",
+    sortOrder = "desc"
+  } = options;
 
   const skip = (page - 1) * limit;
 
-  const [projects, total] = await Promise.all([
-    ProjectModel.find()
-      .sort({
-        createdAt: -1
-      })
-      .skip(skip)
-      .limit(limit),
+  const filter: {
+    status?: ProjectStatus;
+    $or?: Array<{
+      name: { $regex: string; $options: string };
+    } | {
+      description: { $regex: string; $options: string };
+    }>;
+  } = {};
 
-    ProjectModel.countDocuments()
-  ]);
+  if (status) {
+    filter.status = status;
+  }
+
+  if (search) {
+    filter.$or = [
+      {
+        name: {
+          $regex: search,
+          $options: "i"
+        }
+      },
+      {
+        description: {
+          $regex: search,
+          $options: "i"
+        }
+      }
+    ];
+  }
+
+const sortDirection = sortOrder === "asc" ? 1 : -1;
+
+ const [projects, total] = await Promise.all([
+  ProjectModel.find(filter)
+    .sort({
+      [sortBy]: sortDirection
+    })
+    .skip(skip)
+    .limit(limit),
+
+  ProjectModel.countDocuments(filter)
+]);
 
   const totalPages = Math.ceil(total / limit);
 
