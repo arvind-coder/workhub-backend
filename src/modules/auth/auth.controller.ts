@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middlewares/app-error.js";
 import { sendSuccess } from "../../utils/api-response.js";
-import { loginUser, registerUser } from "./auth.service.js";
+import { loginUser, logoutUser, registerUser } from "./auth.service.js";
+import { refreshUserTokens } from "./auth.service.js";
 
 export const register = async (
   req: Request,
@@ -68,4 +69,45 @@ export const login = async (
   );
 
   sendSuccess(res, result);
+};
+
+export const refresh = async (
+  req: Request,
+  res: Response
+) => {
+  const { refreshToken } = req.body;
+
+  if (
+    typeof refreshToken !== "string" ||
+    !refreshToken.trim()
+  ) {
+    throw new AppError("Refresh token is required", 400);
+  }
+
+  const tokens = await refreshUserTokens(refreshToken);
+
+  sendSuccess(res, tokens);
+};
+
+export const logout = async (
+  req: Request,
+  res: Response
+) => {
+  const { refreshToken } = req.body;
+
+  if (
+    typeof refreshToken !== "string" ||
+    !refreshToken.trim()
+  ) {
+    throw new AppError(
+      "Refresh token is required",
+      400
+    );
+  }
+
+  await logoutUser(refreshToken);
+
+  sendSuccess(res, {
+    message: "Logged out successfully"
+  });
 };

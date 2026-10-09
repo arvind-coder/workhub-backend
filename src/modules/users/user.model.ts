@@ -8,6 +8,7 @@ interface UserDocument {
   role: UserRole;
   createdAt: Date;
   updatedAt: Date;
+  refreshTokenHash?: string;
 }
 
 const userSchema = new Schema<UserDocument>(
@@ -41,6 +42,10 @@ const userSchema = new Schema<UserDocument>(
         "MEMBER"
       ],
       default: "MEMBER"
+    },
+    refreshTokenHash: {
+      type: String,
+      select: false
     }
   },
   {

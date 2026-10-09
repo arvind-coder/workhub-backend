@@ -1,6 +1,7 @@
 import { AppError } from "../../middlewares/app-error.js";
 import { sendSuccess } from "../../utils/api-response.js";
-import { loginUser, registerUser } from "./auth.service.js";
+import { loginUser, logoutUser, registerUser } from "./auth.service.js";
+import { refreshUserTokens } from "./auth.service.js";
 export const register = async (req, res) => {
     const { name, email, password } = req.body;
     if (typeof name !== "string" ||
@@ -30,5 +31,25 @@ export const login = async (req, res) => {
     }
     const result = await loginUser(email.trim().toLowerCase(), password);
     sendSuccess(res, result);
+};
+export const refresh = async (req, res) => {
+    const { refreshToken } = req.body;
+    if (typeof refreshToken !== "string" ||
+        !refreshToken.trim()) {
+        throw new AppError("Refresh token is required", 400);
+    }
+    const tokens = await refreshUserTokens(refreshToken);
+    sendSuccess(res, tokens);
+};
+export const logout = async (req, res) => {
+    const { refreshToken } = req.body;
+    if (typeof refreshToken !== "string" ||
+        !refreshToken.trim()) {
+        throw new AppError("Refresh token is required", 400);
+    }
+    await logoutUser(refreshToken);
+    sendSuccess(res, {
+        message: "Logged out successfully"
+    });
 };
 //# sourceMappingURL=auth.controller.js.map

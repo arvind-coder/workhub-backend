@@ -26,6 +26,10 @@ const userSchema = new Schema({
             "MEMBER"
         ],
         default: "MEMBER"
+    },
+    refreshTokenHash: {
+        type: String,
+        select: false
     }
 }, {
     timestamps: true

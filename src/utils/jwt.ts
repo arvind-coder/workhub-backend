@@ -25,3 +25,25 @@ export const generateAccessToken = (
     expiresIn: "15m"
   });
 };
+
+export const generateRefreshToken = (
+  userId: string,
+  role: UserRole
+): string => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+
+  if (!secret) {
+    throw new Error("JWT_REFRESH_SECRET is not configured");
+  }
+
+  return jwt.sign(
+    {
+      sub: userId,
+      role
+    },
+    secret,
+    {
+      expiresIn: "7d"
+    }
+  );
+};
