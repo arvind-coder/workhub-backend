@@ -1,77 +1,166 @@
-import { randomUUID } from "node:crypto";
+import { ProjectModel } from "./project.model.js";
+
 import type { Project, ProjectStatus } from "./project.types.js";
 
-const projects: Project[] = [];
-
-export const getProjects = (): Project[] => {
-  return projects;
+const toProject = (project: {
+  _id: unknown;
+  name: string;
+  description: string;
+  ownerId: string;
+  status: ProjectStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}): Project => {
+  return {
+    id: String(project._id),
+    name: project.name,
+    description: project.description,
+    ownerId: project.ownerId,
+    status: project.status,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt
+  };
 };
 
-export const getProjectById = (id: string): Project | undefined => {
-  return projects.find((project) => project.id === id);
+export interface GetProjectsOptions {
+  page: number;
+  limit: number;
+  search?: string;
+  status?: ProjectStatus;
+  sortBy?: "name" | "createdAt" | "updatedAt";
+  sortOrder?: "asc" | "desc";
+}
+
+export interface GetProjectsResult {
+  projects: Project[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const getProjects = async (
+  options: GetProjectsOptions
+): Promise<GetProjectsResult> => {
+  const {
+    page,
+    limit,
+    search,
+    status,
+    sortBy = "createdAt",
+    sortOrder = "desc"
+  } = options;
+
+  const skip = (page - 1) * limit;
+
+  const filter: {
+    status?: ProjectStatus;
+    $or?: Array<{
+      name: { $regex: string; $options: string };
+    } | {
+      description: { $regex: string; $options: string };
+    }>;
+  } = {};
+
+  if (status) {
+    filter.status = status;
+  }
+
+  if (search) {
+    filter.$or = [
+      {
+        name: {
+          $regex: search,
+          $options: "i"
+        }
+      },
+      {
+        description: {
+          $regex: search,
+          $options: "i"
+        }
+      }
+    ];
+  }
+
+const sortDirection = sortOrder === "asc" ? 1 : -1;
+
+ const [projects, total] = await Promise.all([
+  ProjectModel.find(filter)
+    .sort({
+      [sortBy]: sortDirection
+    })
+    .skip(skip)
+    .limit(limit),
+
+  ProjectModel.countDocuments(filter)
+]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    projects: projects.map(toProject),
+    total,
+    page,
+    limit,
+    totalPages
+  };
 };
 
-export const createProject = (
+export const getProjectById = async (
+  id: string
+): Promise<Project | undefined> => {
+  const project = await ProjectModel.findById(id);
+
+  if (!project) {
+    return undefined;
+  }
+
+  return toProject(project);
+};
+
+export const createProject = async (
   name: string,
   description: string,
   ownerId: string
-): Project => {
-  const now = new Date();
-
-  const project: Project = {
-    id: randomUUID(),
+): Promise<Project> => {
+  const project = await ProjectModel.create({
     name,
     description,
-    ownerId,
-    status: "active",
-    createdAt: now,
-    updatedAt: now
-  };
+    ownerId
+  });
 
-  projects.push(project);
-
-  return project;
+  return toProject(project);
 };
 
-export const updateProject = (
+export const updateProject = async (
   id: string,
   data: {
     name?: string;
     description?: string;
     status?: ProjectStatus;
   }
-): Project | undefined => {
-  const project = projects.find((project) => project.id === id);
+): Promise<Project | undefined> => {
+  const project = await ProjectModel.findByIdAndUpdate(
+    id,
+    data,
+    {
+      new: true,
+      runValidators: true
+    }
+  );
 
   if (!project) {
     return undefined;
   }
 
-  if (data.name !== undefined) {
-    project.name = data.name;
-  }
-
-  if (data.description !== undefined) {
-    project.description = data.description;
-  }
-
-  if (data.status !== undefined) {
-    project.status = data.status;
-  }
-
-  project.updatedAt = new Date();
-
-  return project;
+  return toProject(project);
 };
 
-export const deleteProject = (id: string): boolean => {
-  const index = projects.findIndex((project) => project.id === id);
+export const deleteProject = async (
+  id: string
+): Promise<boolean> => {
+  const project = await ProjectModel.findByIdAndDelete(id);
 
-  if (index === -1) {
-    return false;
-  }
-
-  projects.splice(index, 1);
-
-  return true;
+  return project !== null;
 };

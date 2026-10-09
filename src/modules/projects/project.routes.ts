@@ -1,5 +1,5 @@
 import { Router } from "express";
-
+import { asyncHandler } from "../../middlewares/async-handler.js";
 import {
   createNewProject,
   deleteExistingProject,
@@ -9,21 +9,22 @@ import {
   testUnknownError,
   updateExistingProject
 } from "./project.controller.js";
+import { authMiddleware } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.get("/", listProjects);
+router.get("/", authMiddleware, asyncHandler(listProjects));
 
-router.get("/test-error", testError);
+router.get("/test-error", asyncHandler(testError));
 
-router.get("/test-unknown-error", testUnknownError);
+router.get("/test-unknown-error", asyncHandler(testUnknownError));
 
-router.get("/:id", getProject);
+router.get("/:id", authMiddleware, asyncHandler(getProject));
 
-router.post("/", createNewProject);
+router.post("/", authMiddleware, asyncHandler(createNewProject));
 
-router.patch("/:id", updateExistingProject);
+router.patch("/:id", authMiddleware, asyncHandler(updateExistingProject));
 
-router.delete("/:id", deleteExistingProject);
+router.delete("/:id", authMiddleware, asyncHandler(deleteExistingProject));
 
 export default router;
