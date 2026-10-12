@@ -81,4 +81,24 @@ export const deleteProject = async (id) => {
     const project = await ProjectModel.findByIdAndDelete(id);
     return project !== null;
 };
+export const updateOwnedProject = async (id, userId, data) => {
+    const project = await ProjectModel.findOneAndUpdate({
+        _id: id,
+        ownerId: userId
+    }, data, {
+        new: true,
+        runValidators: true
+    });
+    if (!project) {
+        return undefined;
+    }
+    return toProject(project);
+};
+export const deleteOwnedProject = async (id, userId) => {
+    const project = await ProjectModel.findOneAndDelete({
+        _id: id,
+        ownerId: userId
+    });
+    return project !== null;
+};
 //# sourceMappingURL=project.service.js.map

@@ -164,3 +164,43 @@ export const deleteProject = async (
 
   return project !== null;
 };
+
+export const updateOwnedProject = async (
+  id: string,
+  userId: string,
+  data: {
+    name?: string;
+    description?: string;
+    status?: ProjectStatus;
+  }
+): Promise<Project | undefined> => {
+  const project = await ProjectModel.findOneAndUpdate(
+    {
+      _id: id,
+      ownerId: userId
+    },
+    data,
+    {
+      new: true,
+      runValidators: true
+    }
+  );
+
+  if (!project) {
+    return undefined;
+  }
+
+  return toProject(project);
+};
+
+export const deleteOwnedProject = async (
+  id: string,
+  userId: string
+): Promise<boolean> => {
+  const project = await ProjectModel.findOneAndDelete({
+    _id: id,
+    ownerId: userId
+  });
+
+  return project !== null;
+};
