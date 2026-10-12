@@ -9,6 +9,9 @@ export const testUnknownError = (_req, _res) => {
     throw new Error("Database connection failed");
 };
 export const listProjects = async (req, res) => {
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
     const search = typeof req.query.search === "string"
@@ -46,8 +49,12 @@ export const listProjects = async (req, res) => {
     const result = await getProjects({
         page,
         limit,
+        requesterId: req.authUser.userId,
+        requesterRole: req.authUser.role,
         ...(search !== undefined ? { search } : {}),
-        ...(status !== undefined ? { status: status } : {}),
+        ...(status !== undefined
+            ? { status: status }
+            : {}),
         sortBy: sortBy,
         sortOrder: sortOrder
     });
@@ -63,7 +70,10 @@ export const getProject = async (req, res) => {
     if (!id || Array.isArray(id)) {
         throw new AppError("Invalid project id", 400);
     }
-    const project = await getProjectById(id);
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    const project = await getProjectById(id, req.authUser.userId, req.authUser.role);
     if (!project) {
         res.status(404).json({
             success: false,

@@ -1,6 +1,14 @@
-import { ProjectModel } from "./project.model.js";
+import mongoose from "mongoose";
+import {
+  ProjectModel,
+  type ProjectDocument
+} from "./project.model.js";
 
 import type { Project, ProjectStatus } from "./project.types.js";
+
+import { ProjectMembershipModel } from "./project-membership.model.js";
+
+import { AppError } from "../../middlewares/app-error.js";
 
 const toProject = (project: {
   _id: unknown;
@@ -29,6 +37,8 @@ export interface GetProjectsOptions {
   status?: ProjectStatus;
   sortBy?: "name" | "createdAt" | "updatedAt";
   sortOrder?: "asc" | "desc";
+  requesterId: string;
+  requesterRole: string;
 }
 
 export interface GetProjectsResult {
@@ -48,76 +58,113 @@ export const getProjects = async (
     search,
     status,
     sortBy = "createdAt",
-    sortOrder = "desc"
+    sortOrder = "desc",
+    requesterId,
+    requesterRole
   } = options;
 
   const skip = (page - 1) * limit;
 
-  const filter: {
-    status?: ProjectStatus;
-    $or?: Array<{
-      name: { $regex: string; $options: string };
-    } | {
-      description: { $regex: string; $options: string };
-    }>;
-  } = {};
+const conditions: Record<string, unknown>[] = [];
 
-  if (status) {
-    filter.status = status;
-  }
+if (status) {
+  conditions.push({ status });
+}
 
-  if (search) {
-    filter.$or = [
-      {
-        name: {
-          $regex: search,
-          $options: "i"
-        }
-      },
-      {
-        description: {
-          $regex: search,
-          $options: "i"
-        }
-      }
-    ];
-  }
+if (search) {
+  conditions.push({
+    $or: [
+      { name: { $regex: search, $options: "i" } },
+      { description: { $regex: search, $options: "i" } }
+    ]
+  });
+}
+
+if (requesterRole !== "ADMIN") {
+  const memberships = await ProjectMembershipModel.find({
+    userId: requesterId
+  })
+    .select("projectId")
+    .lean();
+
+  const memberProjectIds = memberships.map(
+    (membership) => membership.projectId
+  );
+
+  conditions.push({
+    $or: [
+      { ownerId: requesterId },
+      { _id: { $in: memberProjectIds } }
+    ]
+  });
+}
+
+const filter =
+  conditions.length > 0
+    ? { $and: conditions }
+    : {};
 
 const sortDirection = sortOrder === "asc" ? 1 : -1;
 
- const [projects, total] = await Promise.all([
+const [projects, total] = await Promise.all([
   ProjectModel.find(filter)
-    .sort({
-      [sortBy]: sortDirection
-    })
+    .sort({ [sortBy]: sortDirection })
     .skip(skip)
     .limit(limit),
 
   ProjectModel.countDocuments(filter)
 ]);
 
-  const totalPages = Math.ceil(total / limit);
+const totalPages = Math.ceil(total / limit);
 
-  return {
-    projects: projects.map(toProject),
-    total,
-    page,
-    limit,
-    totalPages
-  };
+return {
+  projects: projects.map(toProject),
+  total,
+  page,
+  limit,
+  totalPages
+};
 };
 
+
 export const getProjectById = async (
-  id: string
+  id: string,
+  requesterId: string,
+  requesterRole: string
 ): Promise<Project | undefined> => {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new AppError("Invalid project ID", 400);
+  }
+
   const project = await ProjectModel.findById(id);
 
   if (!project) {
     return undefined;
   }
 
+  if (requesterRole === "ADMIN") {
+    return toProject(project);
+  }
+
+  if (String(project.ownerId) === requesterId) {
+    return toProject(project);
+  }
+
+  const membership = await ProjectMembershipModel.findOne({
+    projectId: project._id,
+    userId: requesterId
+  });
+
+  if (!membership) {
+    throw new AppError(
+      "You do not have access to this project",
+      403
+    );
+  }
+
   return toProject(project);
 };
+
 
 export const createProject = async (
   name: string,

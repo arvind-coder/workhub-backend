@@ -184,4 +184,30 @@ export const updateProjectMemberRole = async (projectId, userId, role, requester
         updatedAt: membership.updatedAt
     };
 };
+export const getAccessibleProject = async (projectId, requesterId, requesterRole) => {
+    if (!mongoose.isValidObjectId(projectId)) {
+        throw new AppError("Invalid project ID", 400);
+    }
+    const project = await ProjectModel.findById(projectId);
+    if (!project) {
+        throw new AppError("Project not found", 404);
+    }
+    // Admin can access every project.
+    if (requesterRole === "ADMIN") {
+        return project;
+    }
+    // Project owner can access their own project.
+    if (String(project.ownerId) === requesterId) {
+        return project;
+    }
+    // Other users must have project membership.
+    const membership = await ProjectMembershipModel.findOne({
+        projectId: project._id,
+        userId: requesterId
+    });
+    if (!membership) {
+        throw new AppError("You do not have access to this project", 403);
+    }
+    return project;
+};
 //# sourceMappingURL=project-membership.service.js.map

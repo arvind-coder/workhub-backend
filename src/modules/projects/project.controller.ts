@@ -31,6 +31,9 @@ export const listProjects = async (
   req: Request,
   res: Response
 ) => {
+  if (!req.authUser) {
+  throw new AppError("Authentication required", 401);
+}
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
 
@@ -100,14 +103,18 @@ export const listProjects = async (
     );
   }
 
-  const result = await getProjects({
-    page,
-    limit,
-    ...(search !== undefined ? { search } : {}),
-    ...(status !== undefined ? { status: status as ProjectStatus } : {}),
-    sortBy: sortBy as "name" | "createdAt" | "updatedAt",
-    sortOrder: sortOrder as "asc" | "desc"
-  });
+ const result = await getProjects({
+  page,
+  limit,
+  requesterId: req.authUser.userId,
+  requesterRole: req.authUser.role,
+  ...(search !== undefined ? { search } : {}),
+  ...(status !== undefined
+    ? { status: status as ProjectStatus }
+    : {}),
+  sortBy: sortBy as "name" | "createdAt" | "updatedAt",
+  sortOrder: sortOrder as "asc" | "desc"
+});
 
   sendPaginatedSuccess(res, result.projects, {
     page: result.page,
@@ -122,7 +129,14 @@ export const getProject = async (req: Request, res: Response) => {
   if (!id || Array.isArray(id)) {
     throw new AppError("Invalid project id", 400);
   }
-  const project = await getProjectById(id);
+  if (!req.authUser) {
+  throw new AppError("Authentication required", 401);
+}
+  const project = await getProjectById(
+  id,
+  req.authUser.userId,
+  req.authUser.role
+);
 
   if (!project) {
     res.status(404).json({
