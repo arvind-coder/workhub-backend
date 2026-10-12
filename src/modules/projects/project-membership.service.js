@@ -146,4 +146,42 @@ export const removeProjectMember = async (projectId, userId, requesterId, reques
         message: "Project member removed successfully"
     };
 };
+export const updateProjectMemberRole = async (projectId, userId, role, requesterId, requesterRole) => {
+    if (!mongoose.isValidObjectId(projectId) ||
+        !mongoose.isValidObjectId(userId)) {
+        throw new AppError("Invalid project or user ID", 400);
+    }
+    if (role !== "MEMBER" &&
+        role !== "PROJECT_MANAGER") {
+        throw new AppError("Role must be MEMBER or PROJECT_MANAGER", 400);
+    }
+    const project = await ProjectModel.findById(projectId);
+    if (!project) {
+        throw new AppError("Project not found", 404);
+    }
+    const isAdmin = requesterRole === "ADMIN";
+    const isOwner = String(project.ownerId) === requesterId;
+    if (!isAdmin && !isOwner) {
+        throw new AppError("Only admin or project owner can update member roles", 403);
+    }
+    if (String(project.ownerId) === userId) {
+        throw new AppError("Project owner's role cannot be changed here", 403);
+    }
+    const membership = await ProjectMembershipModel.findOne({
+        projectId: project._id,
+        userId
+    });
+    if (!membership) {
+        throw new AppError("Project member not found", 404);
+    }
+    membership.role = role;
+    await membership.save();
+    return {
+        id: String(membership._id),
+        projectId: String(membership.projectId),
+        userId: String(membership.userId),
+        role: membership.role,
+        updatedAt: membership.updatedAt
+    };
+};
 //# sourceMappingURL=project-membership.service.js.map

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../middlewares/async-handler.js";
 import { createNewProject, deleteExistingProject, getProject, listProjects, testError, testUnknownError, updateExistingProject } from "./project.controller.js";
-import { addMember, getMembers, removeMember } from "./project-membership.controller.js";
+import { addMember, getMembers, removeMember, updateMemberRole } from "./project-membership.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 const router = Router();
@@ -15,5 +15,6 @@ router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER")
 router.post("/:projectId/members", authMiddleware, asyncHandler(addMember));
 router.get("/:projectId/members", authMiddleware, asyncHandler(getMembers));
 router.delete("/:projectId/members/:userId", authMiddleware, asyncHandler(removeMember));
+router.patch("/:projectId/members/:userId/role", authMiddleware, asyncHandler(updateMemberRole));
 export default router;
 //# sourceMappingURL=project.routes.js.map

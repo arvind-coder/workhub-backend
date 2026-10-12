@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middlewares/app-error.js";
 import { sendSuccess } from "../../utils/api-response.js";
-import { addProjectMember, getProjectMembers, removeProjectMember } from "./project-membership.service.js";
+import { addProjectMember, getProjectMembers, removeProjectMember, updateProjectMemberRole } from "./project-membership.service.js";
 import type { ProjectMemberRole } from "./project-membership.model.js";
 
 export const addMember = async (
@@ -103,3 +103,52 @@ export const removeMember = async (
 
   sendSuccess(res, result);
 };
+
+
+export const updateMemberRole = async (
+  req: Request,
+  res: Response
+) => {
+  const { projectId, userId } = req.params;
+  const { role } = req.body;
+
+  if (
+    !projectId ||
+    Array.isArray(projectId) ||
+    !userId ||
+    Array.isArray(userId)
+  ) {
+    throw new AppError(
+      "Invalid project ID or user ID",
+      400
+    );
+  }
+
+  if (
+    role !== "MEMBER" &&
+    role !== "PROJECT_MANAGER"
+  ) {
+    throw new AppError(
+      "Role must be MEMBER or PROJECT_MANAGER",
+      400
+    );
+  }
+
+  if (!req.authUser) {
+    throw new AppError(
+      "Authentication required",
+      401
+    );
+  }
+
+  const result = await updateProjectMemberRole(
+    projectId,
+    userId,
+    role as ProjectMemberRole,
+    req.authUser.userId,
+    req.authUser.role
+  );
+
+  sendSuccess(res, result);
+};
+
