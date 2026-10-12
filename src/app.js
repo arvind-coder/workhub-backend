@@ -5,10 +5,12 @@ import { notFoundMiddleware } from "./middlewares/not-found.middleware.js";
 import { requestLoggerMiddleware } from "./middlewares/request-logger.middleware.js";
 import { mongooseErrorMiddleware } from "./middlewares/mongoose-error.middleware.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import taskRoutes from "./modules/tasks/task.routes.js";
 const app = express();
 app.use(express.json());
 app.use(requestLoggerMiddleware);
 app.use("/api/auth", authRoutes);
+app.use("/api/projects", taskRoutes);
 app.get("/health", (_req, res) => {
     res.status(200).json({
         success: true,
