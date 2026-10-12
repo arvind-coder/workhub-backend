@@ -9,6 +9,7 @@ import {
   testUnknownError,
   updateExistingProject
 } from "./project.controller.js";
+import { addMember, getMembers, removeMember } from "./project-membership.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 
@@ -28,4 +29,21 @@ router.patch("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"),
 
 router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(deleteExistingProject));
 
+router.post(
+  "/:projectId/members",
+  authMiddleware,
+  asyncHandler(addMember)
+);
+
+router.get(
+  "/:projectId/members",
+  authMiddleware,
+  asyncHandler(getMembers)
+);
+
+router.delete(
+  "/:projectId/members/:userId",
+  authMiddleware,
+  asyncHandler(removeMember)
+);
 export default router;
