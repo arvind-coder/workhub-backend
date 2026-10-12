@@ -10,6 +10,7 @@ import {
   updateExistingProject
 } from "./project.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
+import { authorizeRoles } from "../../middlewares/role.middleware.js";
 
 const router = Router();
 
@@ -21,10 +22,10 @@ router.get("/test-unknown-error", asyncHandler(testUnknownError));
 
 router.get("/:id", authMiddleware, asyncHandler(getProject));
 
-router.post("/", authMiddleware, asyncHandler(createNewProject));
+router.post("/", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(createNewProject));
 
-router.patch("/:id", authMiddleware, asyncHandler(updateExistingProject));
+router.patch("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(updateExistingProject));
 
-router.delete("/:id", authMiddleware, asyncHandler(deleteExistingProject));
+router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(deleteExistingProject));
 
 export default router;
