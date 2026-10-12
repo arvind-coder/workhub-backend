@@ -8,7 +8,7 @@ import { UserModel } from "../users/user.model.js";
 import { TaskModel } from "./task.model.js";
 
 import type { Task } from "./task.types.js";
-import type { CreateTaskInput } from "./task.types.js";
+import type { CreateTaskInput, UpdateTaskInput } from "./task.types.js";
 
 // Convert MongoDB document to API response object.
 const toTask = (task: {
@@ -155,3 +155,117 @@ export const getProjectTasks = async (
 
   return tasks.map(toTask);
 };
+
+
+export const updateTask = async (
+  projectId: string,
+  taskId: string,
+  requesterId: string,
+  requesterRole: string,
+  data: UpdateTaskInput
+): Promise<Task> => {
+  if (!mongoose.isValidObjectId(taskId)) {
+    throw new AppError("Invalid task ID", 400);
+  }
+
+  const project = await getAccessibleProject(
+    projectId,
+    requesterId,
+    requesterRole
+  );
+
+  const task = await TaskModel.findOne({
+    _id: taskId,
+    projectId: project._id
+  });
+
+  if (!task) {
+    throw new AppError("Task not found", 404);
+  }
+
+  const membership = await ProjectMembershipModel.findOne({
+    projectId: project._id,
+    userId: requesterId
+  });
+
+  const canManage =
+    requesterRole === "ADMIN" ||
+    String(project.ownerId) === requesterId ||
+    membership?.role === "PROJECT_MANAGER";
+
+  // Assigned members may change only their task's status.
+  if (!canManage) {
+    const isAssignedMember =
+      task.assignedTo !== undefined &&
+      String(task.assignedTo) === requesterId;
+
+    const fields = Object.keys(data);
+    const onlyStatus =
+      fields.length === 1 && fields[0] === "status";
+
+    if (!isAssignedMember || !onlyStatus) {
+      throw new AppError(
+        "You do not have permission to update this task",
+        403
+      );
+    }
+  }
+
+  if (data.assignedTo !== undefined && data.assignedTo !== null) {
+    if (!mongoose.isValidObjectId(data.assignedTo)) {
+      throw new AppError("Invalid assigned user ID", 400);
+    }
+
+    const assigneeId = new Types.ObjectId(data.assignedTo);
+
+    const assignee = await UserModel.findById(assigneeId)
+      .select("_id");
+
+    if (!assignee) {
+      throw new AppError("Assigned user not found", 404);
+    }
+
+    const isProjectOwner =
+      String(project.ownerId) === String(assigneeId);
+
+    if (!isProjectOwner) {
+      const assigneeMembership =
+        await ProjectMembershipModel.findOne({
+          projectId: project._id,
+          userId: assigneeId
+        });
+
+      if (!assigneeMembership) {
+        throw new AppError(
+          "Assignee must be a member of this project",
+          400
+        );
+      }
+    }
+
+    task.assignedTo = assigneeId;
+  } else if (data.assignedTo === null) {
+    task.set("assignedTo", undefined);
+  }
+
+  if (data.title !== undefined) {
+    task.title = data.title.trim();
+  }
+
+  if (data.description !== undefined) {
+    task.description = data.description.trim();
+  }
+
+  if (data.status !== undefined) {
+    task.status = data.status;
+  }
+
+  if (data.priority !== undefined) {
+    task.priority = data.priority;
+  }
+
+  await task.save();
+
+  return toTask(task);
+};
+

@@ -6,15 +6,18 @@ import { sendSuccess } from "../../utils/api-response.js";
 
 import {
   createTask,
-  getProjectTasks
+  getProjectTasks,
+  updateTask
 } from "./task.service.js";
 
 import {
-  validateCreateTask
+  validateCreateTask,
+  validateUpdateTask
 } from "./task.validation.js";
 
 import type {
-  CreateTaskInput
+  CreateTaskInput,
+  UpdateTaskInput
 } from "./task.types.js";
 
 import type {
@@ -106,4 +109,51 @@ export const listProjectTasks = async (
   );
 
   sendSuccess(res, tasks);
+};
+
+
+
+export const updateExistingTask = async (
+  req: Request,
+  res: Response
+) => {
+  const { projectId, taskId } = req.params;
+
+  if (
+    !projectId ||
+    Array.isArray(projectId) ||
+    !taskId ||
+    Array.isArray(taskId)
+  ) {
+    throw new AppError(
+      "Invalid project ID or task ID",
+      400
+    );
+  }
+
+  if (!req.authUser) {
+    throw new AppError("Authentication required", 401);
+  }
+
+  if (
+    !req.body ||
+    typeof req.body !== "object" ||
+    Array.isArray(req.body)
+  ) {
+    throw new AppError("Request body must be an object", 400);
+  }
+
+  validateUpdateTask(req.body);
+
+  const data = req.body as UpdateTaskInput;
+
+  const task = await updateTask(
+    projectId,
+    taskId,
+    req.authUser.userId,
+    req.authUser.role,
+    data
+  );
+
+  sendSuccess(res, task);
 };

@@ -1,7 +1,7 @@
 import { AppError } from "../../middlewares/app-error.js";
 import { sendSuccess } from "../../utils/api-response.js";
-import { createTask, getProjectTasks } from "./task.service.js";
-import { validateCreateTask } from "./task.validation.js";
+import { createTask, getProjectTasks, updateTask } from "./task.service.js";
+import { validateCreateTask, validateUpdateTask } from "./task.validation.js";
 export const createNewTask = async (req, res) => {
     const { projectId } = req.params;
     if (!projectId || Array.isArray(projectId)) {
@@ -42,5 +42,26 @@ export const listProjectTasks = async (req, res) => {
     }
     const tasks = await getProjectTasks(projectId, req.authUser.userId, req.authUser.role);
     sendSuccess(res, tasks);
+};
+export const updateExistingTask = async (req, res) => {
+    const { projectId, taskId } = req.params;
+    if (!projectId ||
+        Array.isArray(projectId) ||
+        !taskId ||
+        Array.isArray(taskId)) {
+        throw new AppError("Invalid project ID or task ID", 400);
+    }
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    if (!req.body ||
+        typeof req.body !== "object" ||
+        Array.isArray(req.body)) {
+        throw new AppError("Request body must be an object", 400);
+    }
+    validateUpdateTask(req.body);
+    const data = req.body;
+    const task = await updateTask(projectId, taskId, req.authUser.userId, req.authUser.role, data);
+    sendSuccess(res, task);
 };
 //# sourceMappingURL=task.controller.js.map

@@ -6,7 +6,8 @@ import { asyncHandler } from "../../middlewares/async-handler.js";
 
 import {
   createNewTask,
-  listProjectTasks
+  listProjectTasks,
+  updateExistingTask
 } from "./task.controller.js";
 
 
@@ -22,6 +23,12 @@ router.get(
   "/:projectId/tasks",
   authMiddleware,
   asyncHandler(listProjectTasks)
+);
+
+router.patch(
+  "/:projectId/tasks/:taskId",
+  authMiddleware,
+  asyncHandler(updateExistingTask)
 );
 
 export default router;
