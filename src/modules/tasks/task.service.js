@@ -22,7 +22,7 @@ const toTask = (task) => ({
     updatedAt: task.updatedAt
 });
 // Validate project access for the logged-in user.
-const getAccessibleProject = async (projectId, requesterId, requesterRole) => {
+export const getAccessibleProject = async (projectId, requesterId, requesterRole) => {
     if (!mongoose.isValidObjectId(projectId)) {
         throw new AppError("Invalid project ID", 400);
     }

@@ -10,6 +10,7 @@ import {
   updateExistingProject
 } from "./project.controller.js";
 import { addMember, getMembers, removeMember, updateMemberRole } from "./project-membership.controller.js";
+import { getProjectDashboardStats } from "./project-stats.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 
@@ -28,6 +29,12 @@ router.post("/", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asy
 router.patch("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(updateExistingProject));
 
 router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(deleteExistingProject));
+
+router.get(
+  "/:projectId/stats",
+  authMiddleware,
+  asyncHandler(getProjectDashboardStats)
+);
 
 router.post(
   "/:projectId/members",

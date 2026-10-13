@@ -50,7 +50,7 @@ const toTask = (task: {
 });
 
 // Validate project access for the logged-in user.
-const getAccessibleProject = async (
+export const getAccessibleProject = async (
   projectId: string,
   requesterId: string,
   requesterRole: string
