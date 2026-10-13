@@ -9,7 +9,9 @@ import {
   testUnknownError,
   updateExistingProject
 } from "./project.controller.js";
+import { addMember, getMembers, removeMember, updateMemberRole } from "./project-membership.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
+import { authorizeRoles } from "../../middlewares/role.middleware.js";
 
 const router = Router();
 
@@ -21,10 +23,34 @@ router.get("/test-unknown-error", asyncHandler(testUnknownError));
 
 router.get("/:id", authMiddleware, asyncHandler(getProject));
 
-router.post("/", authMiddleware, asyncHandler(createNewProject));
+router.post("/", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(createNewProject));
 
-router.patch("/:id", authMiddleware, asyncHandler(updateExistingProject));
+router.patch("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(updateExistingProject));
 
-router.delete("/:id", authMiddleware, asyncHandler(deleteExistingProject));
+router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(deleteExistingProject));
+
+router.post(
+  "/:projectId/members",
+  authMiddleware,
+  asyncHandler(addMember)
+);
+
+router.get(
+  "/:projectId/members",
+  authMiddleware,
+  asyncHandler(getMembers)
+);
+
+router.delete(
+  "/:projectId/members/:userId",
+  authMiddleware,
+  asyncHandler(removeMember)
+);
+
+router.patch(
+  "/:projectId/members/:userId/role",
+  authMiddleware,
+  asyncHandler(updateMemberRole)
+);
 
 export default router;

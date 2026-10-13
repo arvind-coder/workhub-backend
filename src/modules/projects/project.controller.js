@@ -1,4 +1,4 @@
-import { createProject, deleteProject, getProjectById, getProjects, updateProject } from "./project.service.js";
+import { createProject, deleteOwnedProject, deleteProject, getProjectById, getProjects, updateOwnedProject, updateProject } from "./project.service.js";
 import { AppError } from "../../middlewares/app-error.js";
 import { validateCreateProject, validateUpdateProject } from "./project.validation.js";
 import { sendPaginatedSuccess, sendSuccess } from "../../utils/api-response.js";
@@ -9,6 +9,9 @@ export const testUnknownError = (_req, _res) => {
     throw new Error("Database connection failed");
 };
 export const listProjects = async (req, res) => {
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
     const search = typeof req.query.search === "string"
@@ -46,8 +49,12 @@ export const listProjects = async (req, res) => {
     const result = await getProjects({
         page,
         limit,
+        requesterId: req.authUser.userId,
+        requesterRole: req.authUser.role,
         ...(search !== undefined ? { search } : {}),
-        ...(status !== undefined ? { status: status } : {}),
+        ...(status !== undefined
+            ? { status: status }
+            : {}),
         sortBy: sortBy,
         sortOrder: sortOrder
     });
@@ -63,7 +70,10 @@ export const getProject = async (req, res) => {
     if (!id || Array.isArray(id)) {
         throw new AppError("Invalid project id", 400);
     }
-    const project = await getProjectById(id);
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    const project = await getProjectById(id, req.authUser.userId, req.authUser.role);
     if (!project) {
         res.status(404).json({
             success: false,
@@ -74,9 +84,12 @@ export const getProject = async (req, res) => {
     sendSuccess(res, project);
 };
 export const createNewProject = async (req, res) => {
-    const { name, description, ownerId } = req.body;
-    validateCreateProject(name, description, ownerId);
-    const project = await createProject(name, description, ownerId);
+    const { name, description } = req.body;
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    validateCreateProject(name, description, req.authUser.userId);
+    const project = await createProject(name.trim(), description.trim(), req.authUser.userId);
     sendSuccess(res, project, 201);
 };
 export const updateExistingProject = async (req, res) => {
@@ -84,15 +97,28 @@ export const updateExistingProject = async (req, res) => {
     if (!id || Array.isArray(id)) {
         throw new AppError("Invalid project id", 400);
     }
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
     const { name, description, status } = req.body;
     validateUpdateProject(name, description, status);
-    const project = await updateProject(id, {
-        name,
-        description,
-        status
-    });
+    // Build update object using only supported fields
+    const updateData = {};
+    if (name !== undefined) {
+        updateData.name = name.trim();
+    }
+    if (description !== undefined) {
+        updateData.description = description.trim();
+    }
+    if (status !== undefined) {
+        updateData.status = status;
+    }
+    if (Object.keys(updateData).length === 0) {
+        throw new AppError("At least one field is required to update", 400);
+    }
+    const project = await updateOwnedProject(id, req.authUser.userId, updateData);
     if (!project) {
-        throw new AppError("Project not found", 404);
+        throw new AppError("Project not found or access denied", 404);
     }
     sendSuccess(res, project);
 };
@@ -101,13 +127,12 @@ export const deleteExistingProject = async (req, res) => {
     if (!id || Array.isArray(id)) {
         throw new AppError("Invalid project id", 400);
     }
-    const deleted = await deleteProject(id);
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    const deleted = await deleteOwnedProject(id, req.authUser.userId);
     if (!deleted) {
-        res.status(404).json({
-            success: false,
-            message: "Project not found"
-        });
-        return;
+        throw new AppError("Project not found or access denied", 404);
     }
     sendSuccess(res, {
         message: "Project deleted successfully"

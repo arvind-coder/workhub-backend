@@ -222,3 +222,15 @@ export const logoutUser = async (
     );
   }
 };
+
+export const getCurrentUser = async (
+  userId: string
+): Promise<User> => {
+  const user = await UserModel.findById(userId);
+
+  if (!user) {
+    throw new AppError("User not found", 404);
+  }
+
+  return toUser(user);
+};

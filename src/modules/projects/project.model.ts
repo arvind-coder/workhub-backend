@@ -2,7 +2,7 @@ import { Schema, model } from "mongoose";
 
 import type { ProjectStatus } from "./project.types.js";
 
-interface ProjectDocument {
+export interface ProjectDocument {
   name: string;
   description: string;
   ownerId: string;

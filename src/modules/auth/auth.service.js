@@ -121,4 +121,11 @@ export const logoutUser = async (refreshToken) => {
         throw new AppError("Invalid or revoked refresh token", 401);
     }
 };
+export const getCurrentUser = async (userId) => {
+    const user = await UserModel.findById(userId);
+    if (!user) {
+        throw new AppError("User not found", 404);
+    }
+    return toUser(user);
+};
 //# sourceMappingURL=auth.service.js.map

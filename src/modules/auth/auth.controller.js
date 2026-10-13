@@ -1,7 +1,6 @@
 import { AppError } from "../../middlewares/app-error.js";
 import { sendSuccess } from "../../utils/api-response.js";
-import { loginUser, logoutUser, registerUser } from "./auth.service.js";
-import { refreshUserTokens } from "./auth.service.js";
+import { loginUser, logoutUser, registerUser, refreshUserTokens, getCurrentUser } from "./auth.service.js";
 export const register = async (req, res) => {
     const { name, email, password } = req.body;
     if (typeof name !== "string" ||
@@ -51,5 +50,12 @@ export const logout = async (req, res) => {
     sendSuccess(res, {
         message: "Logged out successfully"
     });
+};
+export const getMe = async (req, res) => {
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    const user = await getCurrentUser(req.authUser.userId);
+    sendSuccess(res, user);
 };
 //# sourceMappingURL=auth.controller.js.map
