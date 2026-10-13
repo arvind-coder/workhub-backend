@@ -6,12 +6,14 @@ import { ProjectModel } from "../projects/project.model.js";
 import { ProjectMembershipModel } from "../projects/project-membership.model.js";
 import { UserModel } from "../users/user.model.js";
 import { TaskModel } from "./task.model.js";
+import { createTaskActivity } from "./task-activity.service.js";
 
 import type { Task } from "./task.types.js";
-import type { CreateTaskInput, 
-  UpdateTaskInput, 
+import type {
+  CreateTaskInput,
+  UpdateTaskInput,
   GetProjectTasksOptions,
-  GetProjectTasksResult 
+  GetProjectTasksResult
 } from "./task.types.js";
 
 // Convert MongoDB document to API response object.
@@ -138,6 +140,24 @@ export const createTask = async (
     priority: input.priority ?? "MEDIUM"
   });
 
+
+  await createTaskActivity({
+    projectId: task.projectId,
+    taskId: task._id,
+    userId: requesterId,
+    action: "TASK_CREATED",
+    message: `Task "${task.title}" was created`,
+    metadata: {
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      assignedTo: task.assignedTo
+        ? String(task.assignedTo)
+        : null,
+    },
+  });
+
+
   return toTask(task);
 };
 
@@ -182,27 +202,27 @@ export const getProjectTasks = async (
       : {}),
     ...(search
       ? {
-          $or: [
-            {
-              title: {
-                $regex: search.replace(
-                  /[.*+?^${}()|[\]\\]/g,
-                  "\\$&"
-                ),
-                $options: "i"
-              }
-            },
-            {
-              description: {
-                $regex: search.replace(
-                  /[.*+?^${}()|[\]\\]/g,
-                  "\\$&"
-                ),
-                $options: "i"
-              }
+        $or: [
+          {
+            title: {
+              $regex: search.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              ),
+              $options: "i"
             }
-          ]
-        }
+          },
+          {
+            description: {
+              $regex: search.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              ),
+              $options: "i"
+            }
+          }
+        ]
+      }
       : {})
   };
 
@@ -254,6 +274,17 @@ export const updateTask = async (
   if (!task) {
     throw new AppError("Task not found", 404);
   }
+
+
+  const previousStatus = task.status;
+  const previousAssignedTo = task.assignedTo
+    ? String(task.assignedTo)
+    : null;
+
+  const previousTitle = task.title;
+  const previousDescription = task.description;
+  const previousPriority = task.priority;
+
 
   const membership = await ProjectMembershipModel.findOne({
     projectId: project._id,
@@ -336,9 +367,80 @@ export const updateTask = async (
     task.priority = data.priority;
   }
 
-  await task.save();
+  
+await task.save();
 
-  return toTask(task);
+// Log status changes.
+if (previousStatus !== task.status) {
+  await createTaskActivity({
+    projectId: task.projectId,
+    taskId: task._id,
+    userId: requesterId,
+    action: "STATUS_CHANGED",
+    message: `Task status changed from ${previousStatus} to ${task.status}`,
+    metadata: {
+      oldStatus: previousStatus,
+      newStatus: task.status,
+    },
+  });
+}
+
+// Log assignee changes.
+const currentAssignedTo = task.assignedTo
+  ? String(task.assignedTo)
+  : null;
+
+if (previousAssignedTo !== currentAssignedTo) {
+  await createTaskActivity({
+    projectId: task.projectId,
+    taskId: task._id,
+    userId: requesterId,
+    action: "ASSIGNEE_CHANGED",
+    message: "Task assignee was changed",
+    metadata: {
+      oldAssignedTo: previousAssignedTo,
+      newAssignedTo: currentAssignedTo,
+    },
+  });
+}
+
+// Log changes to task details.
+const changes: Record<string, unknown> = {};
+
+if (previousTitle !== task.title) {
+  changes.title = {
+    old: previousTitle,
+    new: task.title,
+  };
+}
+
+if (previousDescription !== task.description) {
+  changes.description = {
+    old: previousDescription,
+    new: task.description,
+  };
+}
+
+if (previousPriority !== task.priority) {
+  changes.priority = {
+    old: previousPriority,
+    new: task.priority,
+  };
+}
+
+if (Object.keys(changes).length > 0) {
+  await createTaskActivity({
+    projectId: task.projectId,
+    taskId: task._id,
+    userId: requesterId,
+    action: "TASK_UPDATED",
+    message: "Task details were updated",
+    metadata: { changes },
+  });
+}
+
+return toTask(task);
+
 };
 
 
@@ -385,7 +487,20 @@ export const deleteTask = async (
     );
   }
 
-  await task.deleteOne();
+  
+await task.deleteOne();
+
+await createTaskActivity({
+  projectId: project._id,
+  taskId: task._id,
+  userId: requesterId,
+  action: "TASK_DELETED",
+  message: `Task "${task.title}" was deleted`,
+  metadata: {
+    title: task.title,
+  },
+});
+
 };
 
 

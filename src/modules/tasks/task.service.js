@@ -4,6 +4,7 @@ import { ProjectModel } from "../projects/project.model.js";
 import { ProjectMembershipModel } from "../projects/project-membership.model.js";
 import { UserModel } from "../users/user.model.js";
 import { TaskModel } from "./task.model.js";
+import { createTaskActivity } from "./task-activity.service.js";
 // Convert MongoDB document to API response object.
 const toTask = (task) => ({
     id: String(task._id),
@@ -76,6 +77,21 @@ export const createTask = async (projectId, requesterId, requesterRole, input) =
         status: input.status ?? "TODO",
         priority: input.priority ?? "MEDIUM"
     });
+    await createTaskActivity({
+        projectId: task.projectId,
+        taskId: task._id,
+        userId: requesterId,
+        action: "TASK_CREATED",
+        message: `Task "${task.title}" was created`,
+        metadata: {
+            title: task.title,
+            status: task.status,
+            priority: task.priority,
+            assignedTo: task.assignedTo
+                ? String(task.assignedTo)
+                : null,
+        },
+    });
     return toTask(task);
 };
 // Get all tasks belonging to a project.
@@ -141,6 +157,13 @@ export const updateTask = async (projectId, taskId, requesterId, requesterRole, 
     if (!task) {
         throw new AppError("Task not found", 404);
     }
+    const previousStatus = task.status;
+    const previousAssignedTo = task.assignedTo
+        ? String(task.assignedTo)
+        : null;
+    const previousTitle = task.title;
+    const previousDescription = task.description;
+    const previousPriority = task.priority;
     const membership = await ProjectMembershipModel.findOne({
         projectId: project._id,
         userId: requesterId
@@ -196,6 +219,67 @@ export const updateTask = async (projectId, taskId, requesterId, requesterRole, 
         task.priority = data.priority;
     }
     await task.save();
+    // Log status changes.
+    if (previousStatus !== task.status) {
+        await createTaskActivity({
+            projectId: task.projectId,
+            taskId: task._id,
+            userId: requesterId,
+            action: "STATUS_CHANGED",
+            message: `Task status changed from ${previousStatus} to ${task.status}`,
+            metadata: {
+                oldStatus: previousStatus,
+                newStatus: task.status,
+            },
+        });
+    }
+    // Log assignee changes.
+    const currentAssignedTo = task.assignedTo
+        ? String(task.assignedTo)
+        : null;
+    if (previousAssignedTo !== currentAssignedTo) {
+        await createTaskActivity({
+            projectId: task.projectId,
+            taskId: task._id,
+            userId: requesterId,
+            action: "ASSIGNEE_CHANGED",
+            message: "Task assignee was changed",
+            metadata: {
+                oldAssignedTo: previousAssignedTo,
+                newAssignedTo: currentAssignedTo,
+            },
+        });
+    }
+    // Log changes to task details.
+    const changes = {};
+    if (previousTitle !== task.title) {
+        changes.title = {
+            old: previousTitle,
+            new: task.title,
+        };
+    }
+    if (previousDescription !== task.description) {
+        changes.description = {
+            old: previousDescription,
+            new: task.description,
+        };
+    }
+    if (previousPriority !== task.priority) {
+        changes.priority = {
+            old: previousPriority,
+            new: task.priority,
+        };
+    }
+    if (Object.keys(changes).length > 0) {
+        await createTaskActivity({
+            projectId: task.projectId,
+            taskId: task._id,
+            userId: requesterId,
+            action: "TASK_UPDATED",
+            message: "Task details were updated",
+            metadata: { changes },
+        });
+    }
     return toTask(task);
 };
 export const deleteTask = async (projectId, taskId, requesterId, requesterRole) => {
@@ -221,6 +305,16 @@ export const deleteTask = async (projectId, taskId, requesterId, requesterRole) 
         throw new AppError("You do not have permission to delete this task", 403);
     }
     await task.deleteOne();
+    await createTaskActivity({
+        projectId: project._id,
+        taskId: task._id,
+        userId: requesterId,
+        action: "TASK_DELETED",
+        message: `Task "${task.title}" was deleted`,
+        metadata: {
+            title: task.title,
+        },
+    });
 };
 export const getTaskById = async (projectId, taskId, requesterId, requesterRole) => {
     if (!mongoose.isValidObjectId(taskId)) {
