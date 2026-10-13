@@ -8,7 +8,11 @@ import { UserModel } from "../users/user.model.js";
 import { TaskModel } from "./task.model.js";
 
 import type { Task } from "./task.types.js";
-import type { CreateTaskInput, UpdateTaskInput } from "./task.types.js";
+import type { CreateTaskInput, 
+  UpdateTaskInput, 
+  GetProjectTasksOptions,
+  GetProjectTasksResult 
+} from "./task.types.js";
 
 // Convert MongoDB document to API response object.
 const toTask = (task: {
@@ -138,23 +142,91 @@ export const createTask = async (
 };
 
 // Get all tasks belonging to a project.
+
 export const getProjectTasks = async (
   projectId: string,
   requesterId: string,
-  requesterRole: string
-): Promise<Task[]> => {
+  requesterRole: string,
+  options: GetProjectTasksOptions
+): Promise<GetProjectTasksResult> => {
   const project = await getAccessibleProject(
     projectId,
     requesterId,
     requesterRole
   );
 
-  const tasks = await TaskModel.find({
-    projectId: project._id
-  }).sort({ createdAt: -1 });
+  const {
+    page,
+    limit,
+    search,
+    status,
+    priority,
+    assignedTo,
+    sortBy = "createdAt",
+    sortOrder = "desc"
+  } = options;
 
-  return tasks.map(toTask);
+  if (
+    assignedTo !== undefined &&
+    !mongoose.isValidObjectId(assignedTo)
+  ) {
+    throw new AppError("Invalid assigned user ID", 400);
+  }
+
+  const filter = {
+    projectId: project._id,
+    ...(status ? { status } : {}),
+    ...(priority ? { priority } : {}),
+    ...(assignedTo
+      ? { assignedTo: new Types.ObjectId(assignedTo) }
+      : {}),
+    ...(search
+      ? {
+          $or: [
+            {
+              title: {
+                $regex: search.replace(
+                  /[.*+?^${}()|[\]\\]/g,
+                  "\\$&"
+                ),
+                $options: "i"
+              }
+            },
+            {
+              description: {
+                $regex: search.replace(
+                  /[.*+?^${}()|[\]\\]/g,
+                  "\\$&"
+                ),
+                $options: "i"
+              }
+            }
+          ]
+        }
+      : {})
+  };
+
+  const skip = (page - 1) * limit;
+  const sortDirection = sortOrder === "asc" ? 1 : -1;
+
+  const [tasks, total] = await Promise.all([
+    TaskModel.find(filter)
+      .sort({ [sortBy]: sortDirection })
+      .skip(skip)
+      .limit(limit),
+
+    TaskModel.countDocuments(filter)
+  ]);
+
+  return {
+    tasks: tasks.map(toTask),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit)
+  };
 };
+
 
 
 export const updateTask = async (
@@ -267,5 +339,52 @@ export const updateTask = async (
   await task.save();
 
   return toTask(task);
+};
+
+
+
+export const deleteTask = async (
+  projectId: string,
+  taskId: string,
+  requesterId: string,
+  requesterRole: string
+): Promise<void> => {
+  if (!mongoose.isValidObjectId(taskId)) {
+    throw new AppError("Invalid task ID", 400);
+  }
+
+  const project = await getAccessibleProject(
+    projectId,
+    requesterId,
+    requesterRole
+  );
+
+  const task = await TaskModel.findOne({
+    _id: taskId,
+    projectId: project._id
+  });
+
+  if (!task) {
+    throw new AppError("Task not found", 404);
+  }
+
+  const membership = await ProjectMembershipModel.findOne({
+    projectId: project._id,
+    userId: requesterId
+  });
+
+  const canDelete =
+    requesterRole === "ADMIN" ||
+    String(project.ownerId) === requesterId ||
+    membership?.role === "PROJECT_MANAGER";
+
+  if (!canDelete) {
+    throw new AppError(
+      "You do not have permission to delete this task",
+      403
+    );
+  }
+
+  await task.deleteOne();
 };
 
