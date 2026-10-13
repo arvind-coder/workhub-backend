@@ -388,3 +388,31 @@ export const deleteTask = async (
   await task.deleteOne();
 };
 
+
+export const getTaskById = async (
+  projectId: string,
+  taskId: string,
+  requesterId: string,
+  requesterRole: string
+): Promise<Task> => {
+  if (!mongoose.isValidObjectId(taskId)) {
+    throw new AppError("Invalid task ID", 400);
+  }
+
+  const project = await getAccessibleProject(
+    projectId,
+    requesterId,
+    requesterRole
+  );
+
+  const task = await TaskModel.findOne({
+    _id: taskId,
+    projectId: project._id
+  });
+
+  if (!task) {
+    throw new AppError("Task not found", 404);
+  }
+
+  return toTask(task);
+};

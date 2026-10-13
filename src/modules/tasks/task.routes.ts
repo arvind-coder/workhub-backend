@@ -7,6 +7,7 @@ import { asyncHandler } from "../../middlewares/async-handler.js";
 import {
   createNewTask,
   deleteExistingTask,
+  getTaskDetails,
   listProjectTasks,
   updateExistingTask
 } from "./task.controller.js";
@@ -36,6 +37,12 @@ router.delete(
   "/:projectId/tasks/:taskId",
   authMiddleware,
   asyncHandler(deleteExistingTask)
+);
+
+router.get(
+  "/:projectId/tasks/:taskId",
+  authMiddleware,
+  asyncHandler(getTaskDetails)
 );
 
 export default router;

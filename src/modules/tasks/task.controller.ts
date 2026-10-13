@@ -8,7 +8,8 @@ import {
   createTask,
   getProjectTasks,
   updateTask,
-  deleteTask
+  deleteTask,
+  getTaskById
 } from "./task.service.js";
 
 import {
@@ -326,4 +327,40 @@ export const deleteExistingTask = async (
   sendSuccess(res, {
     message: "Task deleted successfully"
   });
+};
+
+
+export const getTaskDetails = async (
+  req: Request,
+  res: Response
+) => {
+  const { projectId, taskId } = req.params;
+
+  if (
+    !projectId ||
+    Array.isArray(projectId) ||
+    !taskId ||
+    Array.isArray(taskId)
+  ) {
+    throw new AppError(
+      "Invalid project ID or task ID",
+      400
+    );
+  }
+
+  if (!req.authUser) {
+    throw new AppError(
+      "Authentication required",
+      401
+    );
+  }
+
+  const task = await getTaskById(
+    projectId,
+    taskId,
+    req.authUser.userId,
+    req.authUser.role
+  );
+
+  sendSuccess(res, task);
 };

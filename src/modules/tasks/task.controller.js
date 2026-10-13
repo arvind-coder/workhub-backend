@@ -1,6 +1,6 @@
 import { AppError } from "../../middlewares/app-error.js";
 import { sendPaginatedSuccess, sendSuccess } from "../../utils/api-response.js";
-import { createTask, getProjectTasks, updateTask, deleteTask } from "./task.service.js";
+import { createTask, getProjectTasks, updateTask, deleteTask, getTaskById } from "./task.service.js";
 import { validateCreateTask, validateUpdateTask } from "./task.validation.js";
 export const createNewTask = async (req, res) => {
     const { projectId } = req.params;
@@ -154,5 +154,19 @@ export const deleteExistingTask = async (req, res) => {
     sendSuccess(res, {
         message: "Task deleted successfully"
     });
+};
+export const getTaskDetails = async (req, res) => {
+    const { projectId, taskId } = req.params;
+    if (!projectId ||
+        Array.isArray(projectId) ||
+        !taskId ||
+        Array.isArray(taskId)) {
+        throw new AppError("Invalid project ID or task ID", 400);
+    }
+    if (!req.authUser) {
+        throw new AppError("Authentication required", 401);
+    }
+    const task = await getTaskById(projectId, taskId, req.authUser.userId, req.authUser.role);
+    sendSuccess(res, task);
 };
 //# sourceMappingURL=task.controller.js.map
