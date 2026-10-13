@@ -10,8 +10,8 @@ export const createNewTask = async (req, res) => {
     if (!req.authUser) {
         throw new AppError("Authentication required", 401);
     }
-    const { title, description, assignedTo, status, priority } = req.body;
-    validateCreateTask(title, description, status, priority);
+    const { title, description, assignedTo, status, priority, dueDate } = req.body;
+    validateCreateTask(title, description, status, priority, dueDate);
     if (assignedTo !== undefined &&
         typeof assignedTo !== "string") {
         throw new AppError("assignedTo must be a user ID string", 400);
@@ -95,6 +95,15 @@ export const listProjectTasks = async (req, res) => {
         sortOrder !== "desc") {
         throw new AppError("sortOrder must be asc or desc", 400);
     }
+    const overdueParam = req.query.overdue;
+    if (overdueParam !== undefined &&
+        overdueParam !== "true" &&
+        overdueParam !== "false") {
+        throw new AppError("overdue must be true or false", 400);
+    }
+    const overdue = overdueParam === "true" ? true :
+        overdueParam === "false" ? false :
+            undefined;
     const result = await getProjectTasks(projectId, req.authUser.userId, req.authUser.role, {
         page,
         limit,
@@ -109,7 +118,8 @@ export const listProjectTasks = async (req, res) => {
             : {}),
         ...(assignedTo !== undefined
             ? { assignedTo }
-            : {})
+            : {}),
+        ...(overdue !== undefined ? { overdue } : {}),
     });
     sendPaginatedSuccess(res, result.tasks, {
         page: result.page,

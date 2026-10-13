@@ -5,7 +5,10 @@ const isTaskStatus = (value) => value === "TODO" ||
 const isTaskPriority = (value) => value === "LOW" ||
     value === "MEDIUM" ||
     value === "HIGH";
-export const validateCreateTask = (title, description, status, priority) => {
+const isValidDateString = (value) => value.trim().length > 0 &&
+    !Number.isNaN(Date.parse(value)) &&
+    /^\d{4}-\d{2}-\d{2}T/.test(value);
+export const validateCreateTask = (title, description, status, priority, dueDate) => {
     if (typeof title !== "string" ||
         title.trim().length < 3 ||
         title.trim().length > 150) {
@@ -23,6 +26,12 @@ export const validateCreateTask = (title, description, status, priority) => {
         !isTaskPriority(priority)) {
         throw new AppError("Priority must be LOW, MEDIUM or HIGH", 400);
     }
+    if (dueDate !== undefined) {
+        if (typeof dueDate !== "string" ||
+            !isValidDateString(dueDate)) {
+            throw new AppError("dueDate must be a valid ISO datetime string", 400);
+        }
+    }
 };
 export const validateUpdateTask = (data) => {
     const allowedFields = [
@@ -30,7 +39,8 @@ export const validateUpdateTask = (data) => {
         "description",
         "assignedTo",
         "status",
-        "priority"
+        "priority",
+        "dueDate"
     ];
     const unsupportedFields = Object.keys(data).filter((key) => !allowedFields.includes(key));
     if (unsupportedFields.length > 0) {
@@ -64,6 +74,12 @@ export const validateUpdateTask = (data) => {
         (typeof data.assignedTo !== "string" ||
             data.assignedTo.trim().length === 0)) {
         throw new AppError("assignedTo must be a valid user ID or null", 400);
+    }
+    if (data.dueDate !== undefined && data.dueDate !== null) {
+        if (typeof data.dueDate !== "string" ||
+            !isValidDateString(data.dueDate)) {
+            throw new AppError("dueDate must be a valid ISO datetime string or null", 400);
+        }
     }
 };
 //# sourceMappingURL=task.validation.js.map

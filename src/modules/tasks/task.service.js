@@ -1,4 +1,4 @@
-import mongoose, { Types } from "mongoose";
+import mongoose, { Types, } from "mongoose";
 import { AppError } from "../../middlewares/app-error.js";
 import { ProjectModel } from "../projects/project.model.js";
 import { ProjectMembershipModel } from "../projects/project-membership.model.js";
@@ -17,6 +17,7 @@ const toTask = (task) => ({
     createdBy: String(task.createdBy),
     status: task.status,
     priority: task.priority,
+    ...(task.dueDate ? { dueDate: task.dueDate } : {}),
     createdAt: task.createdAt,
     updatedAt: task.updatedAt
 });
@@ -75,7 +76,10 @@ export const createTask = async (projectId, requesterId, requesterRole, input) =
         createdBy: new Types.ObjectId(requesterId),
         ...(assignedTo ? { assignedTo } : {}),
         status: input.status ?? "TODO",
-        priority: input.priority ?? "MEDIUM"
+        priority: input.priority ?? "MEDIUM",
+        ...(input.dueDate
+            ? { dueDate: new Date(input.dueDate) }
+            : {}),
     });
     await createTaskActivity({
         projectId: task.projectId,
@@ -97,7 +101,7 @@ export const createTask = async (projectId, requesterId, requesterRole, input) =
 // Get all tasks belonging to a project.
 export const getProjectTasks = async (projectId, requesterId, requesterRole, options) => {
     const project = await getAccessibleProject(projectId, requesterId, requesterRole);
-    const { page, limit, search, status, priority, assignedTo, sortBy = "createdAt", sortOrder = "desc" } = options;
+    const { page, limit, search, status, priority, assignedTo, overdue, sortBy = "createdAt", sortOrder = "desc" } = options;
     if (assignedTo !== undefined &&
         !mongoose.isValidObjectId(assignedTo)) {
         throw new AppError("Invalid assigned user ID", 400);
@@ -109,24 +113,15 @@ export const getProjectTasks = async (projectId, requesterId, requesterRole, opt
         ...(assignedTo
             ? { assignedTo: new Types.ObjectId(assignedTo) }
             : {}),
-        ...(search
+        ...(overdue
             ? {
-                $or: [
-                    {
-                        title: {
-                            $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-                            $options: "i"
-                        }
-                    },
-                    {
-                        description: {
-                            $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-                            $options: "i"
-                        }
-                    }
-                ]
+                $and: [
+                    { dueDate: { $lt: new Date() } },
+                    { status: { $ne: "DONE" } },
+                ],
             }
-            : {})
+            : {}),
+        // Apna existing search filter yahan rehne dein.
     };
     const skip = (page - 1) * limit;
     const sortDirection = sortOrder === "asc" ? 1 : -1;
@@ -217,6 +212,14 @@ export const updateTask = async (projectId, taskId, requesterId, requesterRole, 
     }
     if (data.priority !== undefined) {
         task.priority = data.priority;
+    }
+    if (data.dueDate !== undefined) {
+        if (data.dueDate === null) {
+            task.set("dueDate", undefined);
+        }
+        else {
+            task.dueDate = new Date(data.dueDate);
+        }
     }
     await task.save();
     // Log status changes.

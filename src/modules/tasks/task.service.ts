@@ -1,5 +1,8 @@
 
-import mongoose, { Types } from "mongoose";
+import mongoose, {
+  Types,
+  type QueryFilter,
+} from "mongoose";
 
 import { AppError } from "../../middlewares/app-error.js";
 import { ProjectModel } from "../projects/project.model.js";
@@ -9,6 +12,7 @@ import { TaskModel } from "./task.model.js";
 import { createTaskActivity } from "./task-activity.service.js";
 
 import type { Task } from "./task.types.js";
+import type { TaskDocument } from "./task.model.js";
 import type {
   CreateTaskInput,
   UpdateTaskInput,
@@ -28,6 +32,7 @@ const toTask = (task: {
   priority: Task["priority"];
   createdAt: Date;
   updatedAt: Date;
+  dueDate?: Date;
 }): Task => ({
   id: String(task._id),
   title: task.title,
@@ -39,6 +44,7 @@ const toTask = (task: {
   createdBy: String(task.createdBy),
   status: task.status,
   priority: task.priority,
+  ...(task.dueDate ? { dueDate: task.dueDate } : {}),
   createdAt: task.createdAt,
   updatedAt: task.updatedAt
 });
@@ -137,7 +143,10 @@ export const createTask = async (
     createdBy: new Types.ObjectId(requesterId),
     ...(assignedTo ? { assignedTo } : {}),
     status: input.status ?? "TODO",
-    priority: input.priority ?? "MEDIUM"
+    priority: input.priority ?? "MEDIUM",
+    ...(input.dueDate
+      ? { dueDate: new Date(input.dueDate) }
+      : {}),
   });
 
 
@@ -182,6 +191,7 @@ export const getProjectTasks = async (
     status,
     priority,
     assignedTo,
+    overdue,
     sortBy = "createdAt",
     sortOrder = "desc"
   } = options;
@@ -193,38 +203,23 @@ export const getProjectTasks = async (
     throw new AppError("Invalid assigned user ID", 400);
   }
 
-  const filter = {
-    projectId: project._id,
-    ...(status ? { status } : {}),
-    ...(priority ? { priority } : {}),
-    ...(assignedTo
-      ? { assignedTo: new Types.ObjectId(assignedTo) }
-      : {}),
-    ...(search
-      ? {
-        $or: [
-          {
-            title: {
-              $regex: search.replace(
-                /[.*+?^${}()|[\]\\]/g,
-                "\\$&"
-              ),
-              $options: "i"
-            }
-          },
-          {
-            description: {
-              $regex: search.replace(
-                /[.*+?^${}()|[\]\\]/g,
-                "\\$&"
-              ),
-              $options: "i"
-            }
-          }
-        ]
+  const filter: QueryFilter<TaskDocument> = {
+  projectId: project._id,
+  ...(status ? { status } : {}),
+  ...(priority ? { priority } : {}),
+  ...(assignedTo
+    ? { assignedTo: new Types.ObjectId(assignedTo) }
+    : {}),
+  ...(overdue
+    ? {
+        $and: [
+          { dueDate: { $lt: new Date() } },
+          { status: { $ne: "DONE" } },
+        ],
       }
-      : {})
-  };
+    : {}),
+  // Apna existing search filter yahan rehne dein.
+};
 
   const skip = (page - 1) * limit;
   const sortDirection = sortOrder === "asc" ? 1 : -1;
@@ -366,80 +361,86 @@ export const updateTask = async (
   if (data.priority !== undefined) {
     task.priority = data.priority;
   }
+  if (data.dueDate !== undefined) {
+    if (data.dueDate === null) {
+      task.set("dueDate", undefined);
+    } else {
+      task.dueDate = new Date(data.dueDate);
+    }
+  }
 
-  
-await task.save();
+  await task.save();
 
-// Log status changes.
-if (previousStatus !== task.status) {
-  await createTaskActivity({
-    projectId: task.projectId,
-    taskId: task._id,
-    userId: requesterId,
-    action: "STATUS_CHANGED",
-    message: `Task status changed from ${previousStatus} to ${task.status}`,
-    metadata: {
-      oldStatus: previousStatus,
-      newStatus: task.status,
-    },
-  });
-}
+  // Log status changes.
+  if (previousStatus !== task.status) {
+    await createTaskActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId: requesterId,
+      action: "STATUS_CHANGED",
+      message: `Task status changed from ${previousStatus} to ${task.status}`,
+      metadata: {
+        oldStatus: previousStatus,
+        newStatus: task.status,
+      },
+    });
+  }
 
-// Log assignee changes.
-const currentAssignedTo = task.assignedTo
-  ? String(task.assignedTo)
-  : null;
+  // Log assignee changes.
+  const currentAssignedTo = task.assignedTo
+    ? String(task.assignedTo)
+    : null;
 
-if (previousAssignedTo !== currentAssignedTo) {
-  await createTaskActivity({
-    projectId: task.projectId,
-    taskId: task._id,
-    userId: requesterId,
-    action: "ASSIGNEE_CHANGED",
-    message: "Task assignee was changed",
-    metadata: {
-      oldAssignedTo: previousAssignedTo,
-      newAssignedTo: currentAssignedTo,
-    },
-  });
-}
+  if (previousAssignedTo !== currentAssignedTo) {
+    await createTaskActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId: requesterId,
+      action: "ASSIGNEE_CHANGED",
+      message: "Task assignee was changed",
+      metadata: {
+        oldAssignedTo: previousAssignedTo,
+        newAssignedTo: currentAssignedTo,
+      },
+    });
+  }
 
-// Log changes to task details.
-const changes: Record<string, unknown> = {};
+  // Log changes to task details.
+  const changes: Record<string, unknown> = {};
 
-if (previousTitle !== task.title) {
-  changes.title = {
-    old: previousTitle,
-    new: task.title,
-  };
-}
+  if (previousTitle !== task.title) {
+    changes.title = {
+      old: previousTitle,
+      new: task.title,
+    };
+  }
 
-if (previousDescription !== task.description) {
-  changes.description = {
-    old: previousDescription,
-    new: task.description,
-  };
-}
+  if (previousDescription !== task.description) {
+    changes.description = {
+      old: previousDescription,
+      new: task.description,
+    };
+  }
 
-if (previousPriority !== task.priority) {
-  changes.priority = {
-    old: previousPriority,
-    new: task.priority,
-  };
-}
+  if (previousPriority !== task.priority) {
+    changes.priority = {
+      old: previousPriority,
+      new: task.priority,
+    };
+  }
 
-if (Object.keys(changes).length > 0) {
-  await createTaskActivity({
-    projectId: task.projectId,
-    taskId: task._id,
-    userId: requesterId,
-    action: "TASK_UPDATED",
-    message: "Task details were updated",
-    metadata: { changes },
-  });
-}
+  if (Object.keys(changes).length > 0) {
+    await createTaskActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId: requesterId,
+      action: "TASK_UPDATED",
+      message: "Task details were updated",
+      metadata: { changes },
+    });
+  }
 
-return toTask(task);
+  return toTask(task);
 
 };
 
@@ -487,19 +488,19 @@ export const deleteTask = async (
     );
   }
 
-  
-await task.deleteOne();
 
-await createTaskActivity({
-  projectId: project._id,
-  taskId: task._id,
-  userId: requesterId,
-  action: "TASK_DELETED",
-  message: `Task "${task.title}" was deleted`,
-  metadata: {
-    title: task.title,
-  },
-});
+  await task.deleteOne();
+
+  await createTaskActivity({
+    projectId: project._id,
+    taskId: task._id,
+    userId: requesterId,
+    action: "TASK_DELETED",
+    message: `Task "${task.title}" was deleted`,
+    metadata: {
+      title: task.title,
+    },
+  });
 
 };
 

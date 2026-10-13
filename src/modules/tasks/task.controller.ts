@@ -46,14 +46,16 @@ export const createNewTask = async (
     description,
     assignedTo,
     status,
-    priority
+    priority,
+    dueDate
   } = req.body;
 
   validateCreateTask(
     title,
     description,
     status,
-    priority
+    priority,
+    dueDate
   );
 
   if (
@@ -214,6 +216,24 @@ export const listProjectTasks = async (
     );
   }
 
+  const overdueParam = req.query.overdue;
+
+  if (
+    overdueParam !== undefined &&
+    overdueParam !== "true" &&
+    overdueParam !== "false"
+  ) {
+    throw new AppError(
+      "overdue must be true or false",
+      400
+    );
+  }
+
+  const overdue =
+    overdueParam === "true" ? true :
+      overdueParam === "false" ? false :
+        undefined;
+
   const result = await getProjectTasks(
     projectId,
     req.authUser.userId,
@@ -232,7 +252,8 @@ export const listProjectTasks = async (
         : {}),
       ...(assignedTo !== undefined
         ? { assignedTo }
-        : {})
+        : {}),
+      ...(overdue !== undefined ? { overdue } : {}),
     }
   );
 

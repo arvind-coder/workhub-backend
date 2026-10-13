@@ -14,6 +14,7 @@ export type TaskPriority =
 export interface TaskDocument {
   title: string;
   description: string;
+  dueDate?: Date;
   projectId: Types.ObjectId;
   assignedTo?: Types.ObjectId;
   createdBy: Types.ObjectId;
@@ -37,6 +38,10 @@ const taskSchema = new Schema<TaskDocument>(
       required: true,
       trim: true,
       maxlength: 2000
+    },
+    dueDate: {
+      type: Date,
+      required: false,
     },
     projectId: {
       type: Schema.Types.ObjectId,

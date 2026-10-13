@@ -10,6 +10,7 @@ export interface CreateTaskInput {
   assignedTo?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  dueDate?: string;
 }
 
 export interface UpdateTaskInput {
@@ -18,6 +19,7 @@ export interface UpdateTaskInput {
   assignedTo?: string | null;
   status?: TaskStatus;
   priority?: TaskPriority;
+  dueDate?: string | null;
 }
 
 export interface Task {
@@ -31,6 +33,7 @@ export interface Task {
   priority: TaskPriority;
   createdAt: Date;
   updatedAt: Date;
+  dueDate?: Date;
 }
 
 
@@ -41,6 +44,7 @@ export interface GetProjectTasksOptions {
   status?: TaskStatus;
   priority?: TaskPriority;
   assignedTo?: string;
+  overdue?: boolean;
   sortBy?: "createdAt" | "updatedAt" | "title";
   sortOrder?: "asc" | "desc";
 }
