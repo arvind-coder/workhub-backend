@@ -11,6 +11,7 @@ import {
   listProjectTasks,
   updateExistingTask
 } from "./task.controller.js";
+import { addTaskComment } from "./task-comment.controller.js";
 
 
 const router = Router();
@@ -43,6 +44,12 @@ router.get(
   "/:projectId/tasks/:taskId",
   authMiddleware,
   asyncHandler(getTaskDetails)
+);
+
+router.post(
+  "/:projectId/tasks/:taskId/comments",
+  authMiddleware,
+  asyncHandler(addTaskComment)
 );
 
 export default router;
