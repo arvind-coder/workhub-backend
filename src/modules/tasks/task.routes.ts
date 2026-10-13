@@ -12,6 +12,7 @@ import {
   updateExistingTask
 } from "./task.controller.js";
 import { addTaskComment, listTaskComments } from "./task-comment.controller.js";
+import { listTaskActivities } from "./task-activity.controller.js";
 
 
 const router = Router();
@@ -56,6 +57,12 @@ router.get(
   "/:projectId/tasks/:taskId/comments",
   authMiddleware,
   asyncHandler(listTaskComments),
+);
+
+router.get(
+  "/:projectId/tasks/:taskId/activities",
+  authMiddleware,
+  asyncHandler(listTaskActivities),
 );
 
 export default router;
