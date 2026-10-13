@@ -19,11 +19,17 @@ const isTaskPriority = (
   value === "MEDIUM" ||
   value === "HIGH";
 
+const isValidDateString = (value: string): boolean =>
+  value.trim().length > 0 &&
+  !Number.isNaN(Date.parse(value)) &&
+  /^\d{4}-\d{2}-\d{2}T/.test(value);
+
 export const validateCreateTask = (
   title: unknown,
   description: unknown,
   status?: unknown,
-  priority?: unknown
+  priority?: unknown,
+  dueDate?: unknown
 ): void => {
   if (
     typeof title !== "string" ||
@@ -63,6 +69,18 @@ export const validateCreateTask = (
       400
     );
   }
+
+  if (dueDate !== undefined) {
+  if (
+    typeof dueDate !== "string" ||
+    !isValidDateString(dueDate)
+  ) {
+    throw new AppError(
+      "dueDate must be a valid ISO datetime string",
+      400
+    );
+  }
+}
 };
 
 export const validateUpdateTask = (
@@ -73,7 +91,8 @@ export const validateUpdateTask = (
     "description",
     "assignedTo",
     "status",
-    "priority"
+    "priority",
+    "dueDate"
   ];
 
   const unsupportedFields = Object.keys(data).filter(
@@ -149,4 +168,15 @@ export const validateUpdateTask = (
       400
     );
   }
+  if (data.dueDate !== undefined && data.dueDate !== null) {
+  if (
+    typeof data.dueDate !== "string" ||
+    !isValidDateString(data.dueDate)
+  ) {
+    throw new AppError(
+      "dueDate must be a valid ISO datetime string or null",
+      400
+    );
+  }
+}
 };

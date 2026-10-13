@@ -6,9 +6,13 @@ import { asyncHandler } from "../../middlewares/async-handler.js";
 
 import {
   createNewTask,
+  deleteExistingTask,
+  getTaskDetails,
   listProjectTasks,
   updateExistingTask
 } from "./task.controller.js";
+import { addTaskComment, listTaskComments } from "./task-comment.controller.js";
+import { listTaskActivities } from "./task-activity.controller.js";
 
 
 const router = Router();
@@ -29,6 +33,36 @@ router.patch(
   "/:projectId/tasks/:taskId",
   authMiddleware,
   asyncHandler(updateExistingTask)
+);
+
+router.delete(
+  "/:projectId/tasks/:taskId",
+  authMiddleware,
+  asyncHandler(deleteExistingTask)
+);
+
+router.get(
+  "/:projectId/tasks/:taskId",
+  authMiddleware,
+  asyncHandler(getTaskDetails)
+);
+
+router.post(
+  "/:projectId/tasks/:taskId/comments",
+  authMiddleware,
+  asyncHandler(addTaskComment)
+);
+
+router.get(
+  "/:projectId/tasks/:taskId/comments",
+  authMiddleware,
+  asyncHandler(listTaskComments),
+);
+
+router.get(
+  "/:projectId/tasks/:taskId/activities",
+  authMiddleware,
+  asyncHandler(listTaskActivities),
 );
 
 export default router;

@@ -1,14 +1,24 @@
 
-import mongoose, { Types } from "mongoose";
+import mongoose, {
+  Types,
+  type QueryFilter,
+} from "mongoose";
 
 import { AppError } from "../../middlewares/app-error.js";
 import { ProjectModel } from "../projects/project.model.js";
 import { ProjectMembershipModel } from "../projects/project-membership.model.js";
 import { UserModel } from "../users/user.model.js";
 import { TaskModel } from "./task.model.js";
+import { createTaskActivity } from "./task-activity.service.js";
 
 import type { Task } from "./task.types.js";
-import type { CreateTaskInput, UpdateTaskInput } from "./task.types.js";
+import type { TaskDocument } from "./task.model.js";
+import type {
+  CreateTaskInput,
+  UpdateTaskInput,
+  GetProjectTasksOptions,
+  GetProjectTasksResult
+} from "./task.types.js";
 
 // Convert MongoDB document to API response object.
 const toTask = (task: {
@@ -22,6 +32,7 @@ const toTask = (task: {
   priority: Task["priority"];
   createdAt: Date;
   updatedAt: Date;
+  dueDate?: Date;
 }): Task => ({
   id: String(task._id),
   title: task.title,
@@ -33,6 +44,7 @@ const toTask = (task: {
   createdBy: String(task.createdBy),
   status: task.status,
   priority: task.priority,
+  ...(task.dueDate ? { dueDate: task.dueDate } : {}),
   createdAt: task.createdAt,
   updatedAt: task.updatedAt
 });
@@ -131,30 +143,105 @@ export const createTask = async (
     createdBy: new Types.ObjectId(requesterId),
     ...(assignedTo ? { assignedTo } : {}),
     status: input.status ?? "TODO",
-    priority: input.priority ?? "MEDIUM"
+    priority: input.priority ?? "MEDIUM",
+    ...(input.dueDate
+      ? { dueDate: new Date(input.dueDate) }
+      : {}),
   });
+
+
+  await createTaskActivity({
+    projectId: task.projectId,
+    taskId: task._id,
+    userId: requesterId,
+    action: "TASK_CREATED",
+    message: `Task "${task.title}" was created`,
+    metadata: {
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      assignedTo: task.assignedTo
+        ? String(task.assignedTo)
+        : null,
+    },
+  });
+
 
   return toTask(task);
 };
 
 // Get all tasks belonging to a project.
+
 export const getProjectTasks = async (
   projectId: string,
   requesterId: string,
-  requesterRole: string
-): Promise<Task[]> => {
+  requesterRole: string,
+  options: GetProjectTasksOptions
+): Promise<GetProjectTasksResult> => {
   const project = await getAccessibleProject(
     projectId,
     requesterId,
     requesterRole
   );
 
-  const tasks = await TaskModel.find({
-    projectId: project._id
-  }).sort({ createdAt: -1 });
+  const {
+    page,
+    limit,
+    search,
+    status,
+    priority,
+    assignedTo,
+    overdue,
+    sortBy = "createdAt",
+    sortOrder = "desc"
+  } = options;
 
-  return tasks.map(toTask);
+  if (
+    assignedTo !== undefined &&
+    !mongoose.isValidObjectId(assignedTo)
+  ) {
+    throw new AppError("Invalid assigned user ID", 400);
+  }
+
+  const filter: QueryFilter<TaskDocument> = {
+  projectId: project._id,
+  ...(status ? { status } : {}),
+  ...(priority ? { priority } : {}),
+  ...(assignedTo
+    ? { assignedTo: new Types.ObjectId(assignedTo) }
+    : {}),
+  ...(overdue
+    ? {
+        $and: [
+          { dueDate: { $lt: new Date() } },
+          { status: { $ne: "DONE" } },
+        ],
+      }
+    : {}),
+  // Apna existing search filter yahan rehne dein.
 };
+
+  const skip = (page - 1) * limit;
+  const sortDirection = sortOrder === "asc" ? 1 : -1;
+
+  const [tasks, total] = await Promise.all([
+    TaskModel.find(filter)
+      .sort({ [sortBy]: sortDirection })
+      .skip(skip)
+      .limit(limit),
+
+    TaskModel.countDocuments(filter)
+  ]);
+
+  return {
+    tasks: tasks.map(toTask),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit)
+  };
+};
+
 
 
 export const updateTask = async (
@@ -182,6 +269,17 @@ export const updateTask = async (
   if (!task) {
     throw new AppError("Task not found", 404);
   }
+
+
+  const previousStatus = task.status;
+  const previousAssignedTo = task.assignedTo
+    ? String(task.assignedTo)
+    : null;
+
+  const previousTitle = task.title;
+  const previousDescription = task.description;
+  const previousPriority = task.priority;
+
 
   const membership = await ProjectMembershipModel.findOne({
     projectId: project._id,
@@ -263,9 +361,174 @@ export const updateTask = async (
   if (data.priority !== undefined) {
     task.priority = data.priority;
   }
+  if (data.dueDate !== undefined) {
+    if (data.dueDate === null) {
+      task.set("dueDate", undefined);
+    } else {
+      task.dueDate = new Date(data.dueDate);
+    }
+  }
 
   await task.save();
 
+  // Log status changes.
+  if (previousStatus !== task.status) {
+    await createTaskActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId: requesterId,
+      action: "STATUS_CHANGED",
+      message: `Task status changed from ${previousStatus} to ${task.status}`,
+      metadata: {
+        oldStatus: previousStatus,
+        newStatus: task.status,
+      },
+    });
+  }
+
+  // Log assignee changes.
+  const currentAssignedTo = task.assignedTo
+    ? String(task.assignedTo)
+    : null;
+
+  if (previousAssignedTo !== currentAssignedTo) {
+    await createTaskActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId: requesterId,
+      action: "ASSIGNEE_CHANGED",
+      message: "Task assignee was changed",
+      metadata: {
+        oldAssignedTo: previousAssignedTo,
+        newAssignedTo: currentAssignedTo,
+      },
+    });
+  }
+
+  // Log changes to task details.
+  const changes: Record<string, unknown> = {};
+
+  if (previousTitle !== task.title) {
+    changes.title = {
+      old: previousTitle,
+      new: task.title,
+    };
+  }
+
+  if (previousDescription !== task.description) {
+    changes.description = {
+      old: previousDescription,
+      new: task.description,
+    };
+  }
+
+  if (previousPriority !== task.priority) {
+    changes.priority = {
+      old: previousPriority,
+      new: task.priority,
+    };
+  }
+
+  if (Object.keys(changes).length > 0) {
+    await createTaskActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId: requesterId,
+      action: "TASK_UPDATED",
+      message: "Task details were updated",
+      metadata: { changes },
+    });
+  }
+
   return toTask(task);
+
 };
 
+
+
+export const deleteTask = async (
+  projectId: string,
+  taskId: string,
+  requesterId: string,
+  requesterRole: string
+): Promise<void> => {
+  if (!mongoose.isValidObjectId(taskId)) {
+    throw new AppError("Invalid task ID", 400);
+  }
+
+  const project = await getAccessibleProject(
+    projectId,
+    requesterId,
+    requesterRole
+  );
+
+  const task = await TaskModel.findOne({
+    _id: taskId,
+    projectId: project._id
+  });
+
+  if (!task) {
+    throw new AppError("Task not found", 404);
+  }
+
+  const membership = await ProjectMembershipModel.findOne({
+    projectId: project._id,
+    userId: requesterId
+  });
+
+  const canDelete =
+    requesterRole === "ADMIN" ||
+    String(project.ownerId) === requesterId ||
+    membership?.role === "PROJECT_MANAGER";
+
+  if (!canDelete) {
+    throw new AppError(
+      "You do not have permission to delete this task",
+      403
+    );
+  }
+
+
+  await task.deleteOne();
+
+  await createTaskActivity({
+    projectId: project._id,
+    taskId: task._id,
+    userId: requesterId,
+    action: "TASK_DELETED",
+    message: `Task "${task.title}" was deleted`,
+    metadata: {
+      title: task.title,
+    },
+  });
+
+};
+
+
+export const getTaskById = async (
+  projectId: string,
+  taskId: string,
+  requesterId: string,
+  requesterRole: string
+): Promise<Task> => {
+  if (!mongoose.isValidObjectId(taskId)) {
+    throw new AppError("Invalid task ID", 400);
+  }
+
+  const project = await getAccessibleProject(
+    projectId,
+    requesterId,
+    requesterRole
+  );
+
+  const task = await TaskModel.findOne({
+    _id: taskId,
+    projectId: project._id
+  });
+
+  if (!task) {
+    throw new AppError("Task not found", 404);
+  }
+
+  return toTask(task);
+};
