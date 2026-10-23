@@ -18,9 +18,13 @@ const router = Router();
 
 router.get("/", authMiddleware, asyncHandler(listProjects));
 
-router.get("/test-error", asyncHandler(testError));
+// Debug-only routes. Fail closed: registered only when NODE_ENV is
+// explicitly "development", so an unset or mistyped value stays safe.
+if (process.env.NODE_ENV === "development") {
+  router.get("/test-error", asyncHandler(testError));
 
-router.get("/test-unknown-error", asyncHandler(testUnknownError));
+  router.get("/test-unknown-error", asyncHandler(testUnknownError));
+}
 
 router.get("/:id", authMiddleware, asyncHandler(getProject));
 

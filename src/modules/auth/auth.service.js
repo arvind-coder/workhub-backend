@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import { UserModel } from "../users/user.model.js";
 import { AppError } from "../../middlewares/app-error.js";
-import { generateAccessToken, generateRefreshToken } from "../../utils/jwt.js";
+import { generateAccessToken, generateRefreshToken, jwtVerifyOptions } from "../../utils/jwt.js";
 import { hashToken } from "../../utils/token-hash.js";
 import jwt from "jsonwebtoken";
 const toUser = (user) => {
@@ -14,6 +14,9 @@ const toUser = (user) => {
         updatedAt: user.updatedAt
     };
 };
+// Compared against when the email is unknown so login takes about as long
+// for missing users as for real ones (prevents timing-based enumeration).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("workhub-dummy-password", 12);
 export const registerUser = async (name, email, password) => {
     const existingUser = await UserModel.findOne({
         email
@@ -33,11 +36,8 @@ export const loginUser = async (email, password) => {
     const userDocument = await UserModel.findOne({
         email
     }).select("+password");
-    if (!userDocument) {
-        throw new AppError("Invalid email or password", 401);
-    }
-    const isPasswordValid = await bcrypt.compare(password, userDocument.password);
-    if (!isPasswordValid) {
+    const isPasswordValid = await bcrypt.compare(password, userDocument?.password ?? DUMMY_PASSWORD_HASH);
+    if (!userDocument || !isPasswordValid) {
         throw new AppError("Invalid email or password", 401);
     }
     const user = toUser(userDocument);
@@ -58,7 +58,7 @@ export const refreshUserTokens = async (refreshToken) => {
     }
     let decoded;
     try {
-        const payload = jwt.verify(refreshToken, secret);
+        const payload = jwt.verify(refreshToken, secret, jwtVerifyOptions);
         if (typeof payload === "string" ||
             typeof payload.sub !== "string" ||
             !payload.sub) {
@@ -95,7 +95,7 @@ export const logoutUser = async (refreshToken) => {
     }
     let decoded;
     try {
-        const payload = jwt.verify(refreshToken, secret);
+        const payload = jwt.verify(refreshToken, secret, jwtVerifyOptions);
         if (typeof payload === "string" ||
             typeof payload.sub !== "string" ||
             !payload.sub) {

@@ -1,6 +1,7 @@
 import { createProject, deleteOwnedProject, deleteProject, getProjectById, getProjects, updateOwnedProject, updateProject } from "./project.service.js";
 import { AppError } from "../../middlewares/app-error.js";
 import { validateCreateProject, validateUpdateProject } from "./project.validation.js";
+import { parsePositiveInt } from "../../utils/validation.js";
 import { sendPaginatedSuccess, sendSuccess } from "../../utils/api-response.js";
 export const testError = async (_req, _res) => {
     throw new AppError("This is a test error", 400);
@@ -12,8 +13,8 @@ export const listProjects = async (req, res) => {
     if (!req.authUser) {
         throw new AppError("Authentication required", 401);
     }
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 10;
+    const page = parsePositiveInt(req.query.page, 1, "Page");
+    const limit = parsePositiveInt(req.query.limit, 10, "Limit");
     const search = typeof req.query.search === "string"
         ? req.query.search.trim()
         : undefined;
@@ -26,10 +27,7 @@ export const listProjects = async (req, res) => {
     const sortOrder = typeof req.query.sortOrder === "string"
         ? req.query.sortOrder
         : "desc";
-    if (page < 1) {
-        throw new AppError("Page must be greater than 0", 400);
-    }
-    if (limit < 1 || limit > 100) {
+    if (limit > 100) {
         throw new AppError("Limit must be between 1 and 100", 400);
     }
     if (sortBy !== "name" &&
@@ -75,11 +73,7 @@ export const getProject = async (req, res) => {
     }
     const project = await getProjectById(id, req.authUser.userId, req.authUser.role);
     if (!project) {
-        res.status(404).json({
-            success: false,
-            message: "Project not found"
-        });
-        return;
+        throw new AppError("Project not found", 404);
     }
     sendSuccess(res, project);
 };

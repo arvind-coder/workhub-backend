@@ -12,6 +12,11 @@ export const mongooseErrorMiddleware = (err, _req, _res, next) => {
         next(new AppError(messages.join(", "), 400));
         return;
     }
+    // Duplicate key (unique index violation), e.g. concurrent registrations
+    if (err.code === 11000) {
+        next(new AppError("Resource already exists", 409));
+        return;
+    }
     next(err);
 };
 //# sourceMappingURL=mongoose-error.middleware.js.map

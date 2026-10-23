@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { AppError } from "./app-error.js";
+import { jwtVerifyOptions } from "../utils/jwt.js";
 const allowedRoles = [
     "ADMIN",
     "PROJECT_MANAGER",
@@ -22,7 +23,7 @@ export const authMiddleware = (req, _res, next) => {
         return;
     }
     try {
-        const decoded = jwt.verify(token, secret);
+        const decoded = jwt.verify(token, secret, jwtVerifyOptions);
         if (typeof decoded === "string" ||
             typeof decoded.sub !== "string" ||
             !decoded.sub ||

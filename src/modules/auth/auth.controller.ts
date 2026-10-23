@@ -1,5 +1,11 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middlewares/app-error.js";
+import {
+  MAX_EMAIL_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  isEmail
+} from "../../utils/validation.js";
 import { sendSuccess } from "../../utils/api-response.js";
 import { loginUser, logoutUser, registerUser, refreshUserTokens, getCurrentUser } from "./auth.service.js";
 
@@ -17,6 +23,13 @@ export const register = async (
     throw new AppError("Name is required", 400);
   }
 
+  if (name.trim().length > MAX_NAME_LENGTH) {
+    throw new AppError(
+      `Name cannot exceed ${MAX_NAME_LENGTH} characters`,
+      400
+    );
+  }
+
   if (
     typeof email !== "string" ||
     email.trim().length === 0
@@ -24,12 +37,20 @@ export const register = async (
     throw new AppError("Email is required", 400);
   }
 
+  if (!isEmail(email.trim())) {
+    throw new AppError(
+      `A valid email (max ${MAX_EMAIL_LENGTH} characters) is required`,
+      400
+    );
+  }
+
   if (
     typeof password !== "string" ||
-    password.length < 6
+    password.length < 6 ||
+    password.length > MAX_PASSWORD_LENGTH
   ) {
     throw new AppError(
-      "Password must be at least 6 characters",
+      `Password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`,
       400
     );
   }
