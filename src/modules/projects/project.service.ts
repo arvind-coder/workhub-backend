@@ -9,6 +9,7 @@ import type { Project, ProjectStatus } from "./project.types.js";
 import { ProjectMembershipModel } from "./project-membership.model.js";
 
 import { AppError } from "../../middlewares/app-error.js";
+import { escapeRegex } from "../../utils/validation.js";
 
 const toProject = (project: {
   _id: unknown;
@@ -74,8 +75,8 @@ if (status) {
 if (search) {
   conditions.push({
     $or: [
-      { name: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } }
+      { name: { $regex: escapeRegex(search), $options: "i" } },
+      { description: { $regex: escapeRegex(search), $options: "i" } }
     ]
   });
 }

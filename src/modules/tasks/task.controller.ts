@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 
 import { AppError } from "../../middlewares/app-error.js";
 import { sendPaginatedSuccess, sendSuccess } from "../../utils/api-response.js";
+import { parseSearch } from "../../utils/validation.js";
 
 import {
   createTask,
@@ -79,7 +80,9 @@ export const createNewTask = async (
       : {}),
     ...(priority !== undefined
       ? { priority: priority as TaskPriority }
-      : {})
+      : {}),
+    // Validated above; previously dropped, so dueDate was never saved.
+    ...(dueDate !== undefined ? { dueDate } : {})
   };
 
   const task = await createTask(
@@ -144,17 +147,7 @@ export const listProjectTasks = async (
     );
   }
 
-  const search =
-    typeof req.query.search === "string"
-      ? req.query.search.trim()
-      : undefined;
-
-  if (search !== undefined && search.length > 100) {
-    throw new AppError(
-      "Search cannot exceed 100 characters",
-      400
-    );
-  }
+  const search = parseSearch(req.query.search);
 
   const status = req.query.status;
   if (

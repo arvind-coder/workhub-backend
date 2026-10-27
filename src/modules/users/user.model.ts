@@ -53,9 +53,8 @@ const userSchema = new Schema<UserDocument>(
   }
 );
 
-userSchema.index({
-  email: 1
-});
+// Email uniqueness comes from `unique: true` on the field above. A second
+// userSchema.index({ email: 1 }) here produced IndexKeySpecsConflict.
 
 export const UserModel = model<UserDocument>(
   "User",

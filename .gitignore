@@ -2,5 +2,13 @@ node_modules
 dist
 .env
 .DS_Store
+coverage
+
+# Compiled output goes to dist/; never commit it next to the sources.
+src/**/*.js
+src/**/*.js.map
+
+# Generated declarations are ignored, but this hand-written file is source.
 *.d.ts
 *.d.ts.map
+!src/types/express.d.ts

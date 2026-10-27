@@ -12,7 +12,7 @@ import {
 
 import { AppError } from "../../middlewares/app-error.js";
 import { validateCreateProject, validateUpdateProject } from "./project.validation.js";
-import { parsePositiveInt } from "../../utils/validation.js";
+import { parsePositiveInt, parseSearch } from "../../utils/validation.js";
 import type { ProjectStatus } from "./project.types.js";
 import {
   sendPaginatedSuccess,
@@ -38,10 +38,7 @@ export const listProjects = async (
   const page = parsePositiveInt(req.query.page, 1, "Page");
   const limit = parsePositiveInt(req.query.limit, 10, "Limit");
 
-  const search =
-    typeof req.query.search === "string"
-      ? req.query.search.trim()
-      : undefined;
+  const search = parseSearch(req.query.search);
 
   const status =
     typeof req.query.status === "string"

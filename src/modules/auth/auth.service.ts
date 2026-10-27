@@ -49,13 +49,23 @@ export const registerUser = async (
 
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  const user = await UserModel.create({
-    name,
-    email,
-    password: hashedPassword
-  });
+  try {
+    const user = await UserModel.create({
+      name,
+      email,
+      password: hashedPassword
+    });
 
-  return toUser(user);
+    return toUser(user);
+  } catch (error) {
+    // The pre-check above cannot stop two simultaneous requests; the unique
+    // index is the real guarantee. Return the same response as the pre-check.
+    if ((error as { code?: number }).code === 11000) {
+      throw new AppError("Email is already registered", 409);
+    }
+
+    throw error;
+  }
 };
 
 export const loginUser = async (

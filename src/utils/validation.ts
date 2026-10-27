@@ -31,3 +31,29 @@ export const parsePositiveInt = (
 
   return parsed;
 };
+
+export const MAX_SEARCH_LENGTH = 100;
+
+// Escape regex metacharacters so user input is matched literally.
+export const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Optional free-text search from a query string.
+export const parseSearch = (value: unknown): string | undefined => {
+  if (value === undefined) return undefined;
+
+  if (typeof value !== "string") {
+    throw new AppError("search must be a single string", 400);
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length > MAX_SEARCH_LENGTH) {
+    throw new AppError(
+      `Search cannot exceed ${MAX_SEARCH_LENGTH} characters`,
+      400
+    );
+  }
+
+  return trimmed.length > 0 ? trimmed : undefined;
+};

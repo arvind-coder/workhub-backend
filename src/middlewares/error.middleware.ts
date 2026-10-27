@@ -41,6 +41,18 @@ export const errorMiddleware = (
     return;
   }
 
+  if (
+    parserError.type === "charset.unsupported" ||
+    parserError.type === "encoding.unsupported"
+  ) {
+    res.status(415).json({
+      success: false,
+      message: "Unsupported request encoding"
+    });
+
+    return;
+  }
+
   console.error(err);
 
   res.status(500).json({

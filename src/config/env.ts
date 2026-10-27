@@ -27,6 +27,40 @@ const parseInteger = (
   return Number(raw);
 };
 
+// CORS entries must be exact origins (scheme + host [+ port]). Wildcards,
+// paths and trailing slashes are rejected so a typo cannot silently widen
+// or break the allow-list. The offending value is deliberately not echoed.
+const parseCorsOrigins = (raw: string): string[] => {
+  const origins = raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  for (const origin of origins) {
+    let parsed: URL | undefined;
+
+    try {
+      parsed = new URL(origin);
+    } catch {
+      parsed = undefined;
+    }
+
+    if (
+      !parsed ||
+      origin.includes("*") ||
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.origin !== origin
+    ) {
+      throw new Error(
+        "CORS_ORIGINS must be a comma-separated list of exact origins " +
+          "such as https://app.example.com (no wildcard, path or trailing slash)"
+      );
+    }
+  }
+
+  return origins;
+};
+
 // Validate configuration once at startup so misconfiguration fails fast
 // instead of at the first login request.
 export const loadEnv = () => {
@@ -50,12 +84,24 @@ export const loadEnv = () => {
 
   required("MONGODB_URI");
 
-  const corsOrigins = (process.env.CORS_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS ?? "");
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // ENABLE_API_DOCS overrides the default (docs on outside production).
+  const docsFlag = process.env.ENABLE_API_DOCS?.trim().toLowerCase();
+
+  if (
+    docsFlag !== undefined &&
+    docsFlag !== "" &&
+    docsFlag !== "true" &&
+    docsFlag !== "false"
+  ) {
+    throw new Error("ENABLE_API_DOCS must be true or false");
+  }
 
   return {
+    isProduction,
+    apiDocsEnabled: docsFlag ? docsFlag === "true" : !isProduction,
     corsOrigins,
     trustProxy: parseInteger("TRUST_PROXY", 0, 0),
     authRateLimitMax: parseInteger("AUTH_RATE_LIMIT_MAX", 10, 1),
