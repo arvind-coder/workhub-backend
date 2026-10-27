@@ -34,21 +34,39 @@ if (env.trustProxy > 0) {
 
 app.use(helmet());
 
-// Explicit allow-list. Requests without an Origin header (curl,
-// server-to-server) are allowed; unknown browser origins are rejected.
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || env.corsOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
+// Explicit allow-list. Allowed: requests with no Origin header (curl,
+// server-to-server), origins listed in CORS_ORIGINS, and same-origin
+// requests (the Origin's host equals the Host header), which is what the
+// Swagger UI served by this app sends. Everything else is rejected.
+const isSameOrigin = (origin: string, host: string | undefined): boolean => {
+  if (!host) return false;
 
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+};
+
+app.use(
+  cors((req, callback) => {
+    const origin = req.headers.origin;
+    const allowed =
+      !origin ||
+      env.corsOrigins.includes(origin) ||
+      isSameOrigin(origin, req.headers.host);
+
+    if (!allowed) {
       callback(new AppError("Origin not allowed by CORS", 403));
-    },
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    maxAge: 600
+      return;
+    }
+
+    callback(null, {
+      origin: true,
+      methods: ["GET", "POST", "PATCH", "DELETE"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      maxAge: 600
+    });
   })
 );
 

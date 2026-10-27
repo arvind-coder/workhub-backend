@@ -64,11 +64,25 @@ describe("http security and error responses", { skip: skipReason }, () => {
       assertErrorShape(res.json);
     });
 
+    it("allows same-origin requests (e.g. the Swagger UI served by this app)", async () => {
+      const res = await env.request("POST", "/api/auth/login", {
+        headers: { Origin: env.baseUrl },
+        body: { email: "nobody@example.com", password: "wrong-password" }
+      });
+
+      // Reaches the login handler (401), instead of being stopped by CORS (403).
+      assert.equal(res.status, 401);
+      assert.equal(res.headers.get("access-control-allow-origin"), env.baseUrl);
+    });
+
     it("does not treat a look-alike origin as allowed", async () => {
       for (const origin of [
         "http://localhost:3000.evil.example",
         "https://localhost:3000",
-        "http://localhost:3001"
+        "http://localhost:3001",
+        // Same host name as the server but a different port is another origin.
+        "http://127.0.0.1:1",
+        `${env.baseUrl}.evil.example`
       ]) {
         const res = await env.request("GET", "/health", {
           headers: { Origin: origin }
