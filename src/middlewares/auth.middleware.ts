@@ -7,6 +7,7 @@ import type {
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import { AppError } from "./app-error.js";
+import { jwtVerifyOptions } from "../utils/jwt.js";
 import type { UserRole } from "../modules/users/user.types.js";
 
 interface AccessTokenPayload extends JwtPayload {
@@ -47,7 +48,7 @@ export const authMiddleware = (
   }
 
   try {
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret, jwtVerifyOptions);
 
     if (
       typeof decoded === "string" ||

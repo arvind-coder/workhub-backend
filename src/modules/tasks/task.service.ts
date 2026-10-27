@@ -5,6 +5,7 @@ import mongoose, {
 } from "mongoose";
 
 import { AppError } from "../../middlewares/app-error.js";
+import { escapeRegex } from "../../utils/validation.js";
 import { ProjectModel } from "../projects/project.model.js";
 import { ProjectMembershipModel } from "../projects/project-membership.model.js";
 import { UserModel } from "../users/user.model.js";
@@ -50,7 +51,7 @@ const toTask = (task: {
 });
 
 // Validate project access for the logged-in user.
-const getAccessibleProject = async (
+export const getAccessibleProject = async (
   projectId: string,
   requesterId: string,
   requesterRole: string
@@ -218,7 +219,19 @@ export const getProjectTasks = async (
         ],
       }
     : {}),
-  // Apna existing search filter yahan rehne dein.
+  ...(search
+    ? {
+        $or: [
+          { title: { $regex: escapeRegex(search), $options: "i" } },
+          {
+            description: {
+              $regex: escapeRegex(search),
+              $options: "i"
+            }
+          }
+        ]
+      }
+    : {}),
 };
 
   const skip = (page - 1) * limit;

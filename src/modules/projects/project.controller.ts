@@ -12,6 +12,7 @@ import {
 
 import { AppError } from "../../middlewares/app-error.js";
 import { validateCreateProject, validateUpdateProject } from "./project.validation.js";
+import { parsePositiveInt, parseSearch } from "../../utils/validation.js";
 import type { ProjectStatus } from "./project.types.js";
 import {
   sendPaginatedSuccess,
@@ -34,13 +35,10 @@ export const listProjects = async (
   if (!req.authUser) {
   throw new AppError("Authentication required", 401);
 }
-  const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 10;
+  const page = parsePositiveInt(req.query.page, 1, "Page");
+  const limit = parsePositiveInt(req.query.limit, 10, "Limit");
 
-  const search =
-    typeof req.query.search === "string"
-      ? req.query.search.trim()
-      : undefined;
+  const search = parseSearch(req.query.search);
 
   const status =
     typeof req.query.status === "string"
@@ -57,14 +55,7 @@ export const listProjects = async (
       ? req.query.sortOrder
       : "desc";
 
-  if (page < 1) {
-    throw new AppError(
-      "Page must be greater than 0",
-      400
-    );
-  }
-
-  if (limit < 1 || limit > 100) {
+  if (limit > 100) {
     throw new AppError(
       "Limit must be between 1 and 100",
       400
@@ -139,12 +130,7 @@ export const getProject = async (req: Request, res: Response) => {
 );
 
   if (!project) {
-    res.status(404).json({
-      success: false,
-      message: "Project not found"
-    });
-
-    return;
+    throw new AppError("Project not found", 404);
   }
 
   sendSuccess(res, project);

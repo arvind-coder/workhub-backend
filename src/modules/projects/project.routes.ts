@@ -10,6 +10,7 @@ import {
   updateExistingProject
 } from "./project.controller.js";
 import { addMember, getMembers, removeMember, updateMemberRole } from "./project-membership.controller.js";
+import { getProjectDashboardStats } from "./project-stats.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 
@@ -17,9 +18,13 @@ const router = Router();
 
 router.get("/", authMiddleware, asyncHandler(listProjects));
 
-router.get("/test-error", asyncHandler(testError));
+// Debug-only routes. Fail closed: registered only when NODE_ENV is
+// explicitly "development", so an unset or mistyped value stays safe.
+if (process.env.NODE_ENV === "development") {
+  router.get("/test-error", asyncHandler(testError));
 
-router.get("/test-unknown-error", asyncHandler(testUnknownError));
+  router.get("/test-unknown-error", asyncHandler(testUnknownError));
+}
 
 router.get("/:id", authMiddleware, asyncHandler(getProject));
 
@@ -28,6 +33,12 @@ router.post("/", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asy
 router.patch("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(updateExistingProject));
 
 router.delete("/:id", authMiddleware, authorizeRoles("ADMIN", "PROJECT_MANAGER"), asyncHandler(deleteExistingProject));
+
+router.get(
+  "/:projectId/stats",
+  authMiddleware,
+  asyncHandler(getProjectDashboardStats)
+);
 
 router.post(
   "/:projectId/members",

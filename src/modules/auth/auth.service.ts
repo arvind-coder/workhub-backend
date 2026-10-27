@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import { UserModel } from "../users/user.model.js";
 import type { User } from "../users/user.types.js";
 import { AppError } from "../../middlewares/app-error.js";
-import { generateAccessToken, generateRefreshToken } from "../../utils/jwt.js";
+import { generateAccessToken, generateRefreshToken, jwtVerifyOptions } from "../../utils/jwt.js";
 import { hashToken } from "../../utils/token-hash.js";
 import jwt from "jsonwebtoken";
 
@@ -24,6 +24,13 @@ const toUser = (user: {
   };
 };
 
+// Compared against when the email is unknown so login takes about as long
+// for missing users as for real ones (prevents timing-based enumeration).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
+  "workhub-dummy-password",
+  12
+);
+
 export const registerUser = async (
   name: string,
   email: string,
@@ -42,13 +49,23 @@ export const registerUser = async (
 
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  const user = await UserModel.create({
-    name,
-    email,
-    password: hashedPassword
-  });
+  try {
+    const user = await UserModel.create({
+      name,
+      email,
+      password: hashedPassword
+    });
 
-  return toUser(user);
+    return toUser(user);
+  } catch (error) {
+    // The pre-check above cannot stop two simultaneous requests; the unique
+    // index is the real guarantee. Return the same response as the pre-check.
+    if ((error as { code?: number }).code === 11000) {
+      throw new AppError("Email is already registered", 409);
+    }
+
+    throw error;
+  }
 };
 
 export const loginUser = async (
@@ -59,19 +76,12 @@ export const loginUser = async (
     email
   }).select("+password");
 
-  if (!userDocument) {
-    throw new AppError(
-      "Invalid email or password",
-      401
-    );
-  }
-
   const isPasswordValid = await bcrypt.compare(
     password,
-    userDocument.password
+    userDocument?.password ?? DUMMY_PASSWORD_HASH
   );
 
-  if (!isPasswordValid) {
+  if (!userDocument || !isPasswordValid) {
     throw new AppError(
       "Invalid email or password",
       401
@@ -116,7 +126,7 @@ export const refreshUserTokens = async (
   let decoded: jwt.JwtPayload;
 
   try {
-    const payload = jwt.verify(refreshToken, secret);
+    const payload = jwt.verify(refreshToken, secret, jwtVerifyOptions);
 
     if (
       typeof payload === "string" ||
@@ -181,7 +191,7 @@ export const logoutUser = async (
   let decoded: jwt.JwtPayload;
 
   try {
-    const payload = jwt.verify(refreshToken, secret);
+    const payload = jwt.verify(refreshToken, secret, jwtVerifyOptions);
 
     if (
       typeof payload === "string" ||
